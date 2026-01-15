@@ -58,18 +58,28 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
       return(NULL)
     }
 
+    # Extract affiliations safely - handle missing column
+    n_authors <- nrow(authors)
+    if ("last_known_institution" %in% names(authors) &&
+        !is.null(authors$last_known_institution) &&
+        length(authors$last_known_institution) == n_authors) {
+      affiliations <- vapply(authors$last_known_institution, function(x) {
+        if (is.null(x) || length(x) == 0) return(NA_character_)
+        if (is.data.frame(x)) return(as.character(x$display_name[1]))
+        if (is.list(x)) return(as.character(x$display_name[1]))
+        return(NA_character_)
+      }, FUN.VALUE = character(1))
+    } else {
+      affiliations <- rep(NA_character_, n_authors)
+    }
+
     # Standardize output format
     result <- data.frame(
       openalex_id = authors$id,
       display_name = authors$display_name,
       works_count = authors$works_count,
       cited_by_count = authors$cited_by_count,
-      affiliation = vapply(authors$last_known_institution, function(x) {
-        if (is.null(x) || length(x) == 0) return(NA_character_)
-        if (is.data.frame(x)) return(as.character(x$display_name[1]))
-        if (is.list(x)) return(as.character(x$display_name[1]))
-        return(NA_character_)
-      }, FUN.VALUE = character(1)),
+      affiliation = affiliations,
       stringsAsFactors = FALSE
     )
 

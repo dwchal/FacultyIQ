@@ -1,0 +1,48 @@
+# FacultyIQ Configuration File
+# Copy to config.yml and modify as needed
+# API keys should be set via environment variables, not in this file
+
+default:
+  # App settings
+  app_title: "FacultyIQ - Academic Research Analytics"
+  cache_dir: "cache"
+  cache_expiry_days: 7
+
+  # OpenAlex settings (free, no key required)
+  openalex:
+    enabled: true
+    # Email for polite pool (faster rate limits) - set via OPENALEX_EMAIL env var
+    mailto: !expr Sys.getenv("OPENALEX_EMAIL", "")
+    rate_limit_per_second: 10
+    batch_size: 25
+
+  # Scopus settings (requires API key)
+  scopus:
+    enabled: true
+    # API key - set via SCOPUS_API_KEY env var
+    api_key: !expr Sys.getenv("SCOPUS_API_KEY", "")
+    rate_limit_per_second: 3
+
+  # Google Scholar settings (scraping, fragile)
+  scholar:
+    enabled: true
+    rate_limit_per_second: 0.5
+    # Aggressive caching due to rate limits
+    cache_expiry_days: 30
+
+  # Bibliometrix settings
+  bibliometrix:
+    enabled: true
+
+  # Data settings
+  data:
+    # Maximum roster size (for performance)
+    max_roster_size: 500
+    # Default time window for "recent" metrics
+    recent_years: 5
+    # Minimum year for analysis
+    min_year: 1990
+
+# Production overrides (if needed)
+production:
+  cache_expiry_days: 14

@@ -499,11 +499,12 @@ mod_resolution_server <- function(id, roster_rv) {
       req(rv$selected_row, input$manual_openalex_id)
       idx <- rv$selected_row
 
-      # Validate OpenAlex ID format
+      # Validate and normalize OpenAlex ID format (case-insensitive)
       openalex_id <- trimws(input$manual_openalex_id)
 
-      if (!grepl("^https://openalex.org/A[0-9]+$", openalex_id) &&
-          !grepl("^A[0-9]+$", openalex_id)) {
+      # Accept both lowercase and uppercase, with or without URL prefix
+      if (!grepl("^https://openalex.org/[Aa][0-9]+$", openalex_id, ignore.case = TRUE) &&
+          !grepl("^[Aa][0-9]+$", openalex_id)) {
         shiny::showNotification(
           "Invalid OpenAlex ID format. Expected: A1234567890 or https://openalex.org/A1234567890",
           type = "error"
@@ -511,10 +512,15 @@ mod_resolution_server <- function(id, roster_rv) {
         return()
       }
 
-      # Normalize to full URL
-      if (!grepl("^https://", openalex_id)) {
-        openalex_id <- paste0("https://openalex.org/", openalex_id)
+      # Normalize: extract just the ID part and uppercase it
+      if (grepl("^https://", openalex_id, ignore.case = TRUE)) {
+        # Extract ID from URL
+        openalex_id <- sub("^https://openalex.org/", "", openalex_id, ignore.case = TRUE)
       }
+      # Uppercase the A prefix
+      openalex_id <- paste0("A", sub("^[Aa]", "", openalex_id))
+      # Convert to full URL
+      openalex_id <- paste0("https://openalex.org/", openalex_id)
 
       # Verify by fetching author data
       shiny::withProgress(message = "Verifying OpenAlex ID...", {
@@ -601,8 +607,13 @@ mod_resolution_server <- function(id, roster_rv) {
       rv$fetching <- TRUE
       rv$fetch_log <- character()
 
-      # Prepare roster for fetching
-      roster_for_fetch <- roster_rv$roster %>%
+      # Prepare roster for fetching - use resolved openalex_id from resolution_df
+      # Remove any existing openalex_id column to avoid .x/.y suffix issues
+      roster_base <- roster_rv$roster
+      if ("openalex_id" %in% names(roster_base)) {
+        roster_base <- roster_base %>% dplyr::select(-openalex_id)
+      }
+      roster_for_fetch <- roster_base %>%
         dplyr::left_join(
           rv$resolution_df %>%
             dplyr::select(id, openalex_id),

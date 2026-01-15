@@ -24,19 +24,19 @@ mod_resolution_ui <- function(id) {
           shiny::fluidRow(
             shiny::column(
               width = 3,
-              shiny::valueBoxOutput(ns("vb_total"), width = 12)
+              shinydashboard::valueBoxOutput(ns("vb_total"), width = 12)
             ),
             shiny::column(
               width = 3,
-              shiny::valueBoxOutput(ns("vb_resolved"), width = 12)
+              shinydashboard::valueBoxOutput(ns("vb_resolved"), width = 12)
             ),
             shiny::column(
               width = 3,
-              shiny::valueBoxOutput(ns("vb_pending"), width = 12)
+              shinydashboard::valueBoxOutput(ns("vb_pending"), width = 12)
             ),
             shiny::column(
               width = 3,
-              shiny::valueBoxOutput(ns("vb_failed"), width = 12)
+              shinydashboard::valueBoxOutput(ns("vb_failed"), width = 12)
             )
           )
         )

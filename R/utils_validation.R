@@ -184,10 +184,21 @@ validate_roster <- function(data) {
   }
 
   # Calculate completeness for each column
+  # Handle different column types safely (datetime columns can't be compared to strings)
+  count_present <- function(x) {
+    if (inherits(x, "POSIXct") || inherits(x, "POSIXlt") || inherits(x, "Date")) {
+      # For datetime columns, just check for NA
+      return(sum(!is.na(x)))
+    }
+    # For other columns, check for NA and empty strings
+    x_char <- as.character(x)
+    sum(!is.na(x_char) & x_char != "" & x_char != "NA")
+  }
+
   completeness <- data.frame(
     column = names(data),
     n_total = nrow(data),
-    n_present = sapply(data, function(x) sum(!is.na(x) & x != "" & x != "NA")),
+    n_present = sapply(data, count_present),
     stringsAsFactors = FALSE
   )
   completeness$n_missing <- completeness$n_total - completeness$n_present
@@ -285,6 +296,14 @@ clean_roster <- function(data) {
     data$reaims_pubs <- suppressWarnings(as.numeric(as.character(data$reaims_pubs)))
   }
 
+  # Parse datetime columns from Excel (may be POSIXct, numeric, or character)
+  datetime_cols <- c("start_time", "completion_time")
+  for (col in datetime_cols) {
+    if (col %in% names(data)) {
+      data[[col]] <- parse_excel_datetime(data[[col]])
+    }
+  }
+
   # Standardize academic rank
   if ("academic_rank" %in% names(data)) {
     data$academic_rank <- standardize_rank(data$academic_rank)
@@ -330,11 +349,98 @@ standardize_rank <- function(rank) {
   )
 }
 
+#' Parse Excel datetime values safely
+#'
+#' Handles datetime columns that may come from Excel as:
+#' - POSIXct/POSIXlt objects (already parsed)
+#' - Numeric (Excel serial dates)
+#' - Character strings in various formats
+#'
+#' @param x Vector of datetime values from Excel
+#' @return POSIXct vector
+parse_excel_datetime <- function(x) {
+  if (is.null(x) || length(x) == 0) {
+    return(as.POSIXct(NA))
+  }
+
+  # If already POSIXct, return as-is
+  if (inherits(x, "POSIXct")) {
+    return(x)
+  }
+
+  # If already POSIXlt, convert to POSIXct
+  if (inherits(x, "POSIXlt")) {
+    return(as.POSIXct(x))
+  }
+
+  # If Date, convert to POSIXct
+  if (inherits(x, "Date")) {
+    return(as.POSIXct(x))
+  }
+
+  # If numeric, treat as Excel serial date
+  # Excel serial dates: days since 1899-12-30 (with 1900 leap year bug)
+  if (is.numeric(x)) {
+    # Excel epoch is 1899-12-30 (accounting for Excel's leap year bug)
+    origin <- as.POSIXct("1899-12-30", tz = "UTC")
+    return(as.POSIXct(origin + x * 86400, tz = "UTC"))
+  }
+
+  # If character, try various formats
+  if (is.character(x) || is.factor(x)) {
+    x <- as.character(x)
+
+    # Replace NA-like strings with actual NA
+    x <- ifelse(x %in% c("", "NA", "N/A", "n/a", "-"), NA_character_, x)
+
+    # Try lubridate parsing (handles many formats automatically)
+    result <- suppressWarnings(lubridate::parse_date_time(
+      x,
+      orders = c("mdy HM", "mdy HMS", "ymd HM", "ymd HMS", "dmy HM", "dmy HMS",
+                 "mdy", "ymd", "dmy"),
+      quiet = TRUE
+    ))
+
+    return(as.POSIXct(result))
+  }
+
+  # Fallback: try to coerce
+  suppressWarnings(as.POSIXct(x))
+}
+
 #' Extract year from various date formats
 #'
 #' @param date_str Character vector of date strings
 #' @return Numeric vector of years
 extract_year <- function(date_str) {
+  # Handle POSIXct/Date objects directly
+  if (inherits(date_str, "POSIXct") || inherits(date_str, "POSIXlt") || inherits(date_str, "Date")) {
+    years <- as.numeric(format(date_str, "%Y"))
+    current_year <- as.numeric(format(Sys.Date(), "%Y"))
+    years <- ifelse(years >= 1950 & years <= current_year + 1, years, NA_integer_)
+    return(years)
+  }
+
+  # Handle numeric (Excel serial dates)
+  if (is.numeric(date_str)) {
+    # Check if values look like years (1950-2100) or Excel serial dates (>30000)
+    looks_like_year <- date_str >= 1950 & date_str <= 2100
+    if (all(looks_like_year | is.na(date_str))) {
+      # Values are already years
+      years <- as.integer(date_str)
+      current_year <- as.numeric(format(Sys.Date(), "%Y"))
+      years <- ifelse(years >= 1950 & years <= current_year + 1, years, NA_integer_)
+      return(years)
+    } else {
+      # Treat as Excel serial dates
+      parsed <- parse_excel_datetime(date_str)
+      years <- as.numeric(format(parsed, "%Y"))
+      current_year <- as.numeric(format(Sys.Date(), "%Y"))
+      years <- ifelse(years >= 1950 & years <= current_year + 1, years, NA_integer_)
+      return(years)
+    }
+  }
+
   date_str <- as.character(date_str)
 
   # Try to extract 4-digit year

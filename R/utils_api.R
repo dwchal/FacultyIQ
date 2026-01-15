@@ -64,12 +64,12 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
       display_name = authors$display_name,
       works_count = authors$works_count,
       cited_by_count = authors$cited_by_count,
-      affiliation = sapply(authors$last_known_institution, function(x) {
+      affiliation = vapply(authors$last_known_institution, function(x) {
         if (is.null(x) || length(x) == 0) return(NA_character_)
-        if (is.data.frame(x)) return(x$display_name[1])
-        if (is.list(x)) return(x$display_name)
+        if (is.data.frame(x)) return(as.character(x$display_name[1]))
+        if (is.list(x)) return(as.character(x$display_name[1]))
         return(NA_character_)
-      }),
+      }, FUN.VALUE = character(1)),
       stringsAsFactors = FALSE
     )
 
@@ -219,27 +219,27 @@ get_openalex_works <- function(openalex_id, from_year = NULL, to_year = NULL, li
       cited_by_count = works$cited_by_count,
       doi = works$doi,
       is_oa = works$is_oa,
-      oa_status = sapply(works$open_access, function(x) {
+      oa_status = vapply(works$open_access, function(x) {
         if (is.null(x)) return(NA_character_)
-        if (is.list(x)) return(x$oa_status)
+        if (is.list(x) && !is.null(x$oa_status)) return(as.character(x$oa_status[1]))
         return(NA_character_)
-      }),
-      journal = sapply(works$primary_location, function(x) {
+      }, FUN.VALUE = character(1)),
+      journal = vapply(works$primary_location, function(x) {
         if (is.null(x)) return(NA_character_)
-        if (is.list(x) && !is.null(x$source)) {
-          return(x$source$display_name)
+        if (is.list(x) && !is.null(x$source) && !is.null(x$source$display_name)) {
+          return(as.character(x$source$display_name[1]))
         }
         return(NA_character_)
-      }),
+      }, FUN.VALUE = character(1)),
       stringsAsFactors = FALSE
     )
 
     # Extract concepts/topics if available
     if ("concepts" %in% names(works)) {
-      result$concepts <- sapply(works$concepts, function(x) {
-        if (is.null(x) || nrow(x) == 0) return(NA_character_)
+      result$concepts <- vapply(works$concepts, function(x) {
+        if (is.null(x) || !is.data.frame(x) || nrow(x) == 0) return(NA_character_)
         paste(head(x$display_name, 3), collapse = "; ")
-      })
+      }, FUN.VALUE = character(1))
     }
 
     return(result)

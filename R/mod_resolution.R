@@ -131,11 +131,13 @@ mod_resolution_ui <- function(id) {
       condition = sprintf("output['%s'] == true", ns("fetching")),
       shiny::wellPanel(
         shiny::h4("Fetching Data..."),
-        shiny::progressBar(
-          id = ns("fetch_progress"),
-          value = 0,
-          total = 100,
-          display_pct = TRUE
+        shiny::div(
+          class = "progress",
+          shiny::div(
+            class = "progress-bar progress-bar-striped active",
+            role = "progressbar",
+            style = "width: 100%"
+          )
         ),
         shiny::verbatimTextOutput(ns("fetch_log"))
       )

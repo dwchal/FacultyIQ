@@ -53,7 +53,7 @@ The app uses multiple data sources with graceful degradation:
 ```r
 install.packages(c(
   # Core Shiny
-  "shiny", "shinydashboard", "shinyWidgets",
+  "shiny", "shinydashboard",
   # Data manipulation
   "dplyr", "tidyr", "stringr", "readr", "readxl", "lubridate", "purrr",
   # Visualization

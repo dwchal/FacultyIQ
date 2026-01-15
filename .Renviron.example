@@ -1,0 +1,14 @@
+# FacultyIQ Environment Variables
+# Copy this file to .Renviron and fill in your values
+# DO NOT commit .Renviron with real credentials
+
+# OpenAlex polite pool email (optional but recommended for faster rate limits)
+# Using an email enables the "polite pool" with higher rate limits
+OPENALEX_EMAIL=your.email@institution.edu
+
+# Scopus API key (optional, enables Scopus enrichment)
+# Get your key from https://dev.elsevier.com/
+SCOPUS_API_KEY=your_scopus_api_key_here
+
+# Note: Google Scholar does not require API keys (uses scraping)
+# but is rate-limited and may block excessive requests

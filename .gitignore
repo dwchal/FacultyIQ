@@ -1,0 +1,38 @@
+# R session files
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# Environment and secrets
+.Renviron
+.Rprofile
+
+# Cache directory
+cache/
+*.rds
+
+# Uploaded data (may contain PHI)
+uploads/
+*.xlsx
+*.xls
+
+# Exception: keep sample data
+!data/sample_roster.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# R package build artifacts
+*.tar.gz
+*.Rcheck/
+
+# Shiny logs
+shiny-app.log

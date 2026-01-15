@@ -10,7 +10,6 @@
 # Core Shiny packages
 library(shiny)
 library(shinydashboard)
-library(shinyWidgets)
 
 # Data manipulation (tidyverse-first)
 library(dplyr)

@@ -91,6 +91,12 @@ ui <- shinydashboard::dashboardPage(
         icon = shiny::icon("download")
       ),
 
+      shinydashboard::menuItem(
+        "Rank Prediction",
+        tabName = "prediction",
+        icon = shiny::icon("chart-line")
+      ),
+
       shiny::hr(),
 
       # Data completeness indicator
@@ -200,6 +206,23 @@ ui <- shinydashboard::dashboardPage(
           )
         ),
         mod_export_ui("export")
+      ),
+
+      # Tab 6: Rank Prediction
+      shinydashboard::tabItem(
+        tabName = "prediction",
+        shiny::fluidRow(
+          shiny::column(
+            width = 12,
+            shiny::h2("Faculty Rank Prediction"),
+            shiny::p(
+              "Predict appropriate faculty ranks based on research metrics",
+              "and identify promotion candidates by comparing metrics to",
+              "benchmarks from similar faculty."
+            )
+          )
+        ),
+        mod_prediction_ui("prediction")
       )
     )
   )
@@ -229,6 +252,9 @@ server <- function(input, output, session) {
 
   # Export module
   mod_export_server("export", resolution_rv, upload_rv)
+
+  # Prediction module
+  mod_prediction_server("prediction", resolution_rv, roster_rv = upload_rv)
 
   # ---------------------------------------------------------------------------
   # Sidebar Status

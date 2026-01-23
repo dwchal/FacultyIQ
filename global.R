@@ -108,6 +108,7 @@ source("R/utils_validation.R")
 source("R/utils_cache.R")
 source("R/utils_api.R")
 source("R/utils_metrics.R")
+source("R/utils_prediction.R")
 
 # -----------------------------------------------------------------------------
 # Source Shiny Modules
@@ -118,6 +119,7 @@ source("R/mod_resolution.R")
 source("R/mod_dashboard.R")
 source("R/mod_profile.R")
 source("R/mod_export.R")
+source("R/mod_prediction.R")
 
 # -----------------------------------------------------------------------------
 # Initialize Cache

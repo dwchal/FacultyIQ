@@ -10,6 +10,42 @@ mod_export_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::tagList(
+    # Roster Export for Reimport (Prominent)
+    shiny::fluidRow(
+      shiny::column(
+        width = 12,
+        shiny::wellPanel(
+          style = "background-color: #e8f4f8; border-left: 4px solid #3498db;",
+          shiny::h4(shiny::icon("save"), " Save Roster for Later"),
+          shiny::p(
+            "Export your current roster with all resolved IDs. ",
+            "You can reimport this file later to skip the identity resolution step."
+          ),
+          shiny::fluidRow(
+            shiny::column(
+              width = 4,
+              shiny::downloadButton(
+                ns("export_roster_reimport"),
+                "Export Roster for Reimport",
+                class = "btn-primary btn-lg"
+              )
+            ),
+            shiny::column(
+              width = 8,
+              shiny::div(
+                class = "alert alert-info",
+                style = "margin-bottom: 0;",
+                shiny::icon("info-circle"),
+                " To reimport: Go to 'Upload Data' > select 'Import previously exported roster' > upload this file."
+              )
+            )
+          )
+        )
+      )
+    ),
+
+    shiny::hr(),
+
     shiny::fluidRow(
       shiny::column(
         width = 6,
@@ -130,6 +166,76 @@ mod_export_server <- function(id, resolution_rv, roster_rv) {
       req(resolution_rv$person_data, roster_rv$roster)
       compute_all_metrics(resolution_rv$person_data, roster_rv$roster)
     })
+
+    # Export roster specifically formatted for reimport
+    output$export_roster_reimport <- shiny::downloadHandler(
+      filename = function() {
+        sprintf("facultyiq_roster_export_%s.csv", Sys.Date())
+      },
+      content = function(file) {
+        req(roster_rv$roster)
+
+        # Start with the roster
+        export_df <- roster_rv$roster
+
+        # Add resolved IDs if available
+        if (!is.null(resolution_rv$resolution_df)) {
+          export_df <- export_df %>%
+            dplyr::left_join(
+              resolution_rv$resolution_df %>%
+                dplyr::select(id, openalex_id, resolution_status, resolution_method),
+              by = "id",
+              suffix = c("", ".resolved")
+            )
+
+          # Prefer resolved values
+          if ("openalex_id.resolved" %in% names(export_df)) {
+            export_df$openalex_id <- dplyr::coalesce(
+              export_df$openalex_id.resolved,
+              export_df$openalex_id
+            )
+            export_df$openalex_id.resolved <- NULL
+          }
+          if ("resolution_status.resolved" %in% names(export_df)) {
+            export_df$resolution_status <- dplyr::coalesce(
+              export_df$resolution_status.resolved,
+              export_df$resolution_status
+            )
+            export_df$resolution_status.resolved <- NULL
+          }
+          if ("resolution_method.resolved" %in% names(export_df)) {
+            export_df$resolution_method <- dplyr::coalesce(
+              export_df$resolution_method.resolved,
+              export_df$resolution_method
+            )
+            export_df$resolution_method.resolved <- NULL
+          }
+        }
+
+        # Ensure all standard columns are present
+        standard_cols <- c(
+          "id", "name", "email", "academic_rank", "last_promotion",
+          "reaims_pubs", "scopus_id", "scholar_id", "openalex_id",
+          "associations", "resolution_status", "resolution_method"
+        )
+
+        for (col in standard_cols) {
+          if (!col %in% names(export_df)) {
+            export_df[[col]] <- NA
+          }
+        }
+
+        # Select only standard columns in order
+        export_df <- export_df[, standard_cols]
+
+        utils::write.csv(export_df, file, row.names = FALSE, na = "")
+
+        shiny::showNotification(
+          "Roster exported! You can reimport this file later.",
+          type = "message"
+        )
+      }
+    )
 
     # Export roster with resolved IDs
     output$export_roster <- shiny::downloadHandler(

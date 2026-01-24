@@ -62,6 +62,7 @@ library(digest)
 library(config)
 library(htmltools)
 library(htmlwidgets)
+library(zoo)  # For rolling averages in trajectory analysis
 
 # -----------------------------------------------------------------------------
 # Load Configuration
@@ -109,6 +110,7 @@ source("R/utils_cache.R")
 source("R/utils_api.R")
 source("R/utils_metrics.R")
 source("R/utils_prediction.R")
+source("R/utils_comparison.R")
 
 # -----------------------------------------------------------------------------
 # Source Shiny Modules
@@ -120,6 +122,7 @@ source("R/mod_dashboard.R")
 source("R/mod_profile.R")
 source("R/mod_export.R")
 source("R/mod_prediction.R")
+source("R/mod_comparison.R")
 
 # -----------------------------------------------------------------------------
 # Initialize Cache

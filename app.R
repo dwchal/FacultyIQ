@@ -94,7 +94,13 @@ ui <- shinydashboard::dashboardPage(
       shinydashboard::menuItem(
         "Rank Prediction",
         tabName = "prediction",
-        icon = shiny::icon("chart-line")
+        icon = shiny::icon("graduation-cap")
+      ),
+
+      shinydashboard::menuItem(
+        "Compare & Analyze",
+        tabName = "comparison",
+        icon = shiny::icon("balance-scale")
       ),
 
       shiny::hr(),
@@ -223,6 +229,22 @@ ui <- shinydashboard::dashboardPage(
           )
         ),
         mod_prediction_ui("prediction")
+      ),
+
+      # Tab 7: Compare & Analyze
+      shinydashboard::tabItem(
+        tabName = "comparison",
+        shiny::fluidRow(
+          shiny::column(
+            width = 12,
+            shiny::h2("Compare & Analyze"),
+            shiny::p(
+              "Compare faculty members side-by-side, analyze career trajectories,",
+              "view division rankings, and identify faculty who may need support."
+            )
+          )
+        ),
+        mod_comparison_ui("comparison")
       )
     )
   )
@@ -255,6 +277,9 @@ server <- function(input, output, session) {
 
   # Prediction module
   mod_prediction_server("prediction", resolution_rv, roster_rv = upload_rv)
+
+  # Comparison module
+  mod_comparison_server("comparison", resolution_rv, roster_rv = upload_rv)
 
   # ---------------------------------------------------------------------------
   # Sidebar Status

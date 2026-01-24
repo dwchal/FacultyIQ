@@ -200,8 +200,6 @@ mod_upload_ui <- function(id) {
 
     shiny::hr(),
 
-    shiny::hr(),
-
     # Validation results
     shiny::uiOutput(ns("validation_ui")),
 

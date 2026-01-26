@@ -24,7 +24,7 @@ ui <- shinydashboard::dashboardPage(
 
   # Header
   shinydashboard::dashboardHeader(
-    title = app_config$app_title %||% "FacultyIQ",
+    title = null_coalesce(app_config$app_title, "FacultyIQ"),
     titleWidth = 300,
 
     # Notification dropdown showing data source status
@@ -356,7 +356,7 @@ server <- function(input, output, session) {
 
   session$onSessionEnded(function() {
     # Clean up expired cache on session end
-    cache_clear_expired(expiry_days = app_config$cache_expiry_days %||% 7)
+    cache_clear_expired(expiry_days = null_coalesce(app_config$cache_expiry_days, 7))
   })
 }
 

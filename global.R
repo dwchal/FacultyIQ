@@ -128,14 +128,14 @@ source("R/mod_comparison.R")
 # Helper Functions
 # -----------------------------------------------------------------------------
 
-# Null-coalescing operator (must be defined before use)
-`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+# Null-coalescing helper function
+null_coalesce <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 # -----------------------------------------------------------------------------
 # Initialize Cache
 # -----------------------------------------------------------------------------
 
-init_cache(app_config$cache_dir %||% "cache")
+init_cache(null_coalesce(app_config$cache_dir, "cache"))
 
 # Safe NA check
 is_missing <- function(x) {

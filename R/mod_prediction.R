@@ -3,6 +3,9 @@
 # =============================================================================
 # Predict faculty rank based on metrics and compare to similar faculty
 
+# Helper for NULL coalescing
+null_coalesce <- function(x, y) if (is.null(x) || is.na(x)) y else x
+
 #' Prediction Module UI
 #'
 #' @param id Module namespace ID
@@ -306,11 +309,11 @@ mod_prediction_server <- function(id, resolution_rv, roster_rv) {
           shiny::h5(shiny::icon(status_icon), " Prediction Result"),
           shiny::p(
             shiny::strong("Current Rank: "),
-            pred$current_rank %||% "Unknown"
+            null_coalesce(pred$current_rank, "Unknown")
           ),
           shiny::p(
             shiny::strong("Predicted Rank: "),
-            pred$predicted_rank %||% "Unknown"
+            null_coalesce(pred$predicted_rank, "Unknown")
           ),
           shiny::p(
             shiny::strong("Confidence: "),
@@ -621,9 +624,4 @@ mod_prediction_server <- function(id, resolution_rv, roster_rv) {
 
     return(NULL)
   })
-}
-
-# Helper function for NULL default (if not already defined)
-if (!exists("%||%")) {
-  `%||%` <- function(x, y) if (is.null(x) || is.na(x)) y else x
 }

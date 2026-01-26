@@ -3,6 +3,9 @@
 # =============================================================================
 # Individual faculty member profiles and detailed metrics
 
+# Helper for NULL coalescing
+null_coalesce <- function(x, y) if (is.null(x) || is.na(x)) y else x
+
 #' Profile Module UI
 #'
 #' @param id Module namespace ID
@@ -221,35 +224,35 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
           shiny::column(
             width = 2,
             shiny::wellPanel(
-              shiny::h3(format(metrics$works_count %||% 0, big.mark = ",")),
+              shiny::h3(format(null_coalesce(metrics$works_count, 0), big.mark = ",")),
               shiny::p("Total Works")
             )
           ),
           shiny::column(
             width = 2,
             shiny::wellPanel(
-              shiny::h3(format(metrics$citations_count %||% 0, big.mark = ",")),
+              shiny::h3(format(null_coalesce(metrics$citations_count, 0), big.mark = ",")),
               shiny::p("Citations")
             )
           ),
           shiny::column(
             width = 2,
             shiny::wellPanel(
-              shiny::h3(metrics$h_index %||% "N/A"),
+              shiny::h3(null_coalesce(metrics$h_index, "N/A")),
               shiny::p("h-index")
             )
           ),
           shiny::column(
             width = 2,
             shiny::wellPanel(
-              shiny::h3(metrics$i10_index %||% "N/A"),
+              shiny::h3(null_coalesce(metrics$i10_index, "N/A")),
               shiny::p("i10-index")
             )
           ),
           shiny::column(
             width = 2,
             shiny::wellPanel(
-              shiny::h3(paste0(metrics$oa_percentage %||% "N/A", "%")),
+              shiny::h3(paste0(null_coalesce(metrics$oa_percentage, "N/A"), "%")),
               shiny::p("Open Access")
             )
           ),
@@ -257,8 +260,8 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
             width = 2,
             shiny::wellPanel(
               shiny::h3(sprintf("%d-%d",
-                                metrics$first_pub_year %||% NA,
-                                metrics$last_pub_year %||% NA)),
+                                null_coalesce(metrics$first_pub_year, NA),
+                                null_coalesce(metrics$last_pub_year, NA))),
               shiny::p("Career Span")
             )
           )
@@ -544,18 +547,18 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
 </html>',
                                  roster_row$name,
                                  roster_row$name,
-                                 roster_row$academic_rank %||% "Not specified",
+                                 null_coalesce(roster_row$academic_rank, "Not specified"),
                                  Sys.time(),
-                                 format(metrics$works_count %||% 0, big.mark = ","),
-                                 format(metrics$citations_count %||% 0, big.mark = ","),
-                                 metrics$h_index %||% "N/A",
-                                 metrics$i10_index %||% "N/A",
-                                 metrics$oa_percentage %||% "N/A",
-                                 metrics$first_pub_year %||% "N/A",
-                                 metrics$last_pub_year %||% "N/A",
-                                 metrics$career_years %||% "N/A",
-                                 metrics$works_per_year %||% "N/A",
-                                 metrics$citations_per_work %||% "N/A",
+                                 format(null_coalesce(metrics$works_count, 0), big.mark = ","),
+                                 format(null_coalesce(metrics$citations_count, 0), big.mark = ","),
+                                 null_coalesce(metrics$h_index, "N/A"),
+                                 null_coalesce(metrics$i10_index, "N/A"),
+                                 null_coalesce(metrics$oa_percentage, "N/A"),
+                                 null_coalesce(metrics$first_pub_year, "N/A"),
+                                 null_coalesce(metrics$last_pub_year, "N/A"),
+                                 null_coalesce(metrics$career_years, "N/A"),
+                                 null_coalesce(metrics$works_per_year, "N/A"),
+                                 null_coalesce(metrics$citations_per_work, "N/A"),
                                  paste(metrics$data_sources, collapse = ", ")
         )
 
@@ -566,6 +569,3 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
     return(NULL)
   })
 }
-
-# Helper function for NULL default
-`%||%` <- function(x, y) if (is.null(x) || is.na(x)) y else x

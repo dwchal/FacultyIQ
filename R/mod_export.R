@@ -3,6 +3,9 @@
 # =============================================================================
 # Data export functionality
 
+# Helper for NULL coalescing
+null_coalesce <- function(x, y) if (is.null(x) || is.na(x)) y else x
+
 #' Export Module UI
 #'
 #' @param id Module namespace ID
@@ -553,10 +556,10 @@ mod_export_server <- function(id, resolution_rv, roster_rv) {
                                      dplyr::slice(i)
                                    sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
                                            row$name,
-                                           row$academic_rank %||% "N/A",
-                                           format(row$works_count %||% 0, big.mark = ","),
-                                           format(row$citations_count %||% 0, big.mark = ","),
-                                           row$h_index %||% "N/A")
+                                           null_coalesce(row$academic_rank, "N/A"),
+                                           format(null_coalesce(row$works_count, 0), big.mark = ","),
+                                           format(null_coalesce(row$citations_count, 0), big.mark = ","),
+                                           null_coalesce(row$h_index, "N/A"))
                                  }), collapse = "\n"),
                                  # Top works rows
                                  {
@@ -567,8 +570,8 @@ mod_export_server <- function(id, resolution_rv, roster_rv) {
                                        sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
                                                stringr::str_trunc(row$title, 60),
                                                row$author_name,
-                                               row$publication_year %||% "N/A",
-                                               format(row$cited_by_count %||% 0, big.mark = ","))
+                                               null_coalesce(row$publication_year, "N/A"),
+                                               format(null_coalesce(row$cited_by_count, 0), big.mark = ","))
                                      }), collapse = "\n")
                                    } else {
                                      "<tr><td colspan='4'>No publication data available</td></tr>"
@@ -625,6 +628,3 @@ mod_export_server <- function(id, resolution_rv, roster_rv) {
     return(NULL)
   })
 }
-
-# Helper for NULL default
-`%||%` <- function(x, y) if (is.null(x) || is.na(x)) y else x

@@ -3,8 +3,8 @@
 # =============================================================================
 # Handles roster file upload, validation, and preview
 
-# Helper for NULL coalescing (must be defined before use)
-`%||%` <- function(x, y) if (is.null(x) || is.na(x) || x == "") y else x
+# Helper for NULL coalescing
+null_coalesce <- function(x, y) if (is.null(x) || is.na(x) || x == "") y else x
 
 #' Upload Module UI
 #'
@@ -710,7 +710,7 @@ mod_upload_server <- function(id) {
       new_row <- data.frame(
         id = if (is.null(rv$manual_roster)) 1L else max(rv$manual_roster$id) + 1L,
         name = selected_author$display_name,
-        email = input$manual_email_selected %||% NA_character_,
+        email = null_coalesce(input$manual_email_selected, NA_character_),
         academic_rank = if (!is.null(input$manual_rank_selected) &&
                             input$manual_rank_selected != "") {
           input$manual_rank_selected
@@ -746,7 +746,7 @@ mod_upload_server <- function(id) {
 
     # Add custom entry (without search)
     shiny::observeEvent(input$manual_add_custom, {
-      name <- trimws(input$manual_name %||% "")
+      name <- trimws(null_coalesce(input$manual_name, ""))
 
       if (nchar(name) < 2) {
         shiny::showNotification("Please enter a name", type = "error")
@@ -756,7 +756,7 @@ mod_upload_server <- function(id) {
       new_row <- data.frame(
         id = if (is.null(rv$manual_roster)) 1L else max(rv$manual_roster$id) + 1L,
         name = name,
-        email = input$manual_email %||% NA_character_,
+        email = null_coalesce(input$manual_email, NA_character_),
         academic_rank = if (!is.null(input$manual_rank) && input$manual_rank != "") {
           input$manual_rank
         } else {
@@ -764,8 +764,8 @@ mod_upload_server <- function(id) {
         },
         last_promotion = NA_character_,
         reaims_pubs = NA_integer_,
-        scopus_id = input$manual_scopus_id %||% NA_character_,
-        scholar_id = input$manual_scholar_id %||% NA_character_,
+        scopus_id = null_coalesce(input$manual_scopus_id, NA_character_),
+        scholar_id = null_coalesce(input$manual_scholar_id, NA_character_),
         associations = NA_character_,
         openalex_id = NA_character_,
         resolution_status = "pending",

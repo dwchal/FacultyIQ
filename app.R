@@ -135,7 +135,7 @@ ui <- shinydashboard::dashboardPage(
     ),
 
     shinydashboard::tabItems(
-      # Tab 1: Upload
+      # Tab 1: Upload (temporarily disabled)
       shinydashboard::tabItem(
         tabName = "upload",
         shiny::fluidRow(
@@ -145,10 +145,14 @@ ui <- shinydashboard::dashboardPage(
             shiny::p(
               "Upload your faculty roster file (CSV or Excel) containing names,",
               "academic ranks, and external identifiers (Scopus ID, Google Scholar ID)."
+            ),
+            shiny::div(
+              class = "alert alert-warning",
+              shiny::icon("exclamation-triangle"),
+              " Upload module is temporarily disabled. Please use the Import from File feature in the Resolution tab."
             )
           )
-        ),
-        mod_upload_ui("upload")
+        )
       ),
 
       # Tab 2: Resolution
@@ -260,8 +264,15 @@ server <- function(input, output, session) {
   # Initialize Modules
   # ---------------------------------------------------------------------------
 
-  # Upload module returns roster data
-  upload_rv <- mod_upload_server("upload")
+  # Upload module disabled - create stub reactive values
+
+  upload_rv <- shiny::reactiveValues(
+    roster = NULL,
+    ready = FALSE,
+    proceed = FALSE,
+    manual_roster = NULL,
+    search_results = NULL
+  )
 
   # Resolution module receives roster, returns resolved data
   resolution_rv <- mod_resolution_server("resolution", upload_rv)

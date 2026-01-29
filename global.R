@@ -123,7 +123,6 @@ source("R/utils_comparison.R")
 # Source Shiny Modules
 # -----------------------------------------------------------------------------
 
-source("R/mod_upload.R")
 source("R/mod_resolution.R")
 source("R/mod_dashboard.R")
 source("R/mod_profile.R")

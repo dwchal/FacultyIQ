@@ -3,9 +3,6 @@
 # =============================================================================
 # Handles roster file upload, validation, and preview
 
-# Helper for NULL coalescing
-null_coalesce <- function(x, y) if (is.null(x) || is.na(x) || x == "") y else x
-
 #' Upload Module UI
 #'
 #' @param id Module namespace ID

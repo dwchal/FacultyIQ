@@ -3,9 +3,6 @@
 # =============================================================================
 # Predict faculty rank based on metrics and compare to similar faculty
 
-# Helper for NULL coalescing
-null_coalesce <- function(x, y) if (is.null(x) || is.na(x)) y else x
-
 #' Prediction Module UI
 #'
 #' @param id Module namespace ID

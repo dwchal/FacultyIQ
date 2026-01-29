@@ -102,6 +102,13 @@ if (scopus_configured) {
 }
 
 # -----------------------------------------------------------------------------
+# Helper Functions
+# -----------------------------------------------------------------------------
+
+# Null-coalescing helper function (must be defined before sourcing modules)
+null_coalesce <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+
+# -----------------------------------------------------------------------------
 # Source Utility Functions
 # -----------------------------------------------------------------------------
 
@@ -123,13 +130,6 @@ source("R/mod_profile.R")
 source("R/mod_export.R")
 source("R/mod_prediction.R")
 source("R/mod_comparison.R")
-
-# -----------------------------------------------------------------------------
-# Helper Functions
-# -----------------------------------------------------------------------------
-
-# Null-coalescing helper function
-null_coalesce <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 # -----------------------------------------------------------------------------
 # Initialize Cache

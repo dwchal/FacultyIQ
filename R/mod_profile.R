@@ -3,9 +3,6 @@
 # =============================================================================
 # Individual faculty member profiles and detailed metrics
 
-# Helper for NULL coalescing
-null_coalesce <- function(x, y) if (is.null(x) || is.na(x)) y else x
-
 #' Profile Module UI
 #'
 #' @param id Module namespace ID

@@ -3,9 +3,6 @@
 # =============================================================================
 # Data export functionality
 
-# Helper for NULL coalescing
-null_coalesce <- function(x, y) if (is.null(x) || is.na(x)) y else x
-
 #' Export Module UI
 #'
 #' @param id Module namespace ID

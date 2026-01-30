@@ -1,0 +1,39 @@
+default:
+  app:
+    title: "FacultyIQ - Academic Research Analytics"
+    version: "2.0.0"
+    max_roster_size: 500
+    max_file_size_mb: 50
+
+  cache:
+    enabled: true
+    directory: ".cache"
+    expiration_days: 7
+    scholar_expiration_days: 30
+
+  openalex:
+    email: null  # Set via OPENALEX_EMAIL env var for polite pool
+    per_page: 200
+    max_works: 1000
+
+  scopus:
+    api_key: null  # Set via SCOPUS_API_KEY env var
+    enabled: false
+
+  scholar:
+    enabled: true
+    rate_limit_seconds: 3
+    max_retries: 2
+
+  analysis:
+    recent_years: 5
+    min_works_for_prediction: 3
+    default_year_range: [2010, 2025]
+
+  ranks:
+    - "Instructor"
+    - "Assistant Professor"
+    - "Associate Professor"
+    - "Full Professor"
+    - "Research Faculty"
+    - "Professor Emeritus"

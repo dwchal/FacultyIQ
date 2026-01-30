@@ -1,0 +1,37 @@
+# FacultyIQ Python - Requirements
+# Academic Research Analytics Dashboard
+
+# Web framework
+streamlit>=1.30.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+plotly>=5.18.0
+
+# API clients and HTTP
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Google Scholar (optional)
+scholarly>=1.7.0
+
+# Scientific computing
+scipy>=1.11.0
+
+# Configuration and environment
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+
+# Excel support
+openpyxl>=3.1.0
+xlrd>=2.0.0
+
+# Testing (development)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Type checking (development)
+mypy>=1.6.0

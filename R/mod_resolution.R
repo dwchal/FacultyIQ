@@ -419,8 +419,14 @@ mod_resolution_server <- function(id, roster_rv) {
 
       selected <- rv$build_search_results[selected_idx, ]
 
+      # Compute next ID
+      next_id <- 1L
+      if (!is.null(rv$manual_roster)) {
+        next_id <- max(rv$manual_roster$id) + 1L
+      }
+
       new_row <- data.frame(
-        id = if (is.null(rv$manual_roster)) 1L else max(rv$manual_roster$id) + 1L,
+        id = next_id,
         name = selected$display_name,
         email = NA_character_,
         academic_rank = NA_character_,
@@ -453,11 +459,23 @@ mod_resolution_server <- function(id, roster_rv) {
         return()
       }
 
+      # Compute next ID
+      next_id <- 1L
+      if (!is.null(rv$manual_roster)) {
+        next_id <- max(rv$manual_roster$id) + 1L
+      }
+
+      # Get academic rank
+      rank_val <- NA_character_
+      if (!is.null(input$manual_rank) && input$manual_rank != "") {
+        rank_val <- input$manual_rank
+      }
+
       new_row <- data.frame(
-        id = if (is.null(rv$manual_roster)) 1L else max(rv$manual_roster$id) + 1L,
+        id = next_id,
         name = name,
         email = null_coalesce(trimws(input$manual_email), NA_character_),
-        academic_rank = if (!is.null(input$manual_rank) && input$manual_rank != "") input$manual_rank else NA_character_,
+        academic_rank = rank_val,
         last_promotion = NA_character_,
         reaims_pubs = NA_integer_,
         scopus_id = null_coalesce(trimws(input$manual_scopus), NA_character_),
@@ -568,24 +586,38 @@ mod_resolution_server <- function(id, roster_rv) {
 
         # Standardize column names
         names(data) <- tolower(names(data))
+        n_rows <- nrow(data)
+        col_names <- names(data)
+
+        # Extract columns with defaults
+        email_col <- if ("email" %in% col_names) data$email else rep(NA_character_, n_rows)
+        rank_col <- if ("academic_rank" %in% col_names) data$academic_rank else rep(NA_character_, n_rows)
+        promo_col <- if ("last_promotion" %in% col_names) as.character(data$last_promotion) else rep(NA_character_, n_rows)
+        reaims_col <- if ("reaims_pubs" %in% col_names) as.integer(data$reaims_pubs) else rep(NA_integer_, n_rows)
+        scopus_col <- if ("scopus_id" %in% col_names) as.character(data$scopus_id) else rep(NA_character_, n_rows)
+        scholar_col <- if ("scholar_id" %in% col_names) as.character(data$scholar_id) else rep(NA_character_, n_rows)
+        assoc_col <- if ("associations" %in% col_names) data$associations else rep(NA_character_, n_rows)
+        oalex_col <- if ("openalex_id" %in% col_names) data$openalex_id else rep(NA_character_, n_rows)
+
+        # Determine resolution status
+        status_col <- rep("pending", n_rows)
+        if ("openalex_id" %in% col_names && any(!is.na(data$openalex_id))) {
+          status_col <- ifelse(!is.na(oalex_col) & oalex_col != "", "resolved", "pending")
+        }
 
         # Build roster from imported data
         imported_roster <- data.frame(
-          id = seq_len(nrow(data)),
+          id = seq_len(n_rows),
           name = data$name,
-          email = if ("email" %in% names(data)) data$email else NA_character_,
-          academic_rank = if ("academic_rank" %in% names(data)) data$academic_rank else NA_character_,
-          last_promotion = if ("last_promotion" %in% names(data)) as.character(data$last_promotion) else NA_character_,
-          reaims_pubs = if ("reaims_pubs" %in% names(data)) as.integer(data$reaims_pubs) else NA_integer_,
-          scopus_id = if ("scopus_id" %in% names(data)) as.character(data$scopus_id) else NA_character_,
-          scholar_id = if ("scholar_id" %in% names(data)) as.character(data$scholar_id) else NA_character_,
-          associations = if ("associations" %in% names(data)) data$associations else NA_character_,
-          openalex_id = if ("openalex_id" %in% names(data)) data$openalex_id else NA_character_,
-          resolution_status = if ("openalex_id" %in% names(data) && any(!is.na(data$openalex_id))) {
-            ifelse(!is.na(data$openalex_id) & data$openalex_id != "", "resolved", "pending")
-          } else {
-            "pending"
-          },
+          email = email_col,
+          academic_rank = rank_col,
+          last_promotion = promo_col,
+          reaims_pubs = reaims_col,
+          scopus_id = scopus_col,
+          scholar_id = scholar_col,
+          associations = assoc_col,
+          openalex_id = oalex_col,
+          resolution_status = status_col,
           resolution_method = "import",
           stringsAsFactors = FALSE
         )

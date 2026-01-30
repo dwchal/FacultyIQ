@@ -135,7 +135,7 @@ ui <- shinydashboard::dashboardPage(
     ),
 
     shinydashboard::tabItems(
-      # Tab 1: Upload (temporarily disabled)
+      # Tab 1: Upload (redirects to Resolution)
       shinydashboard::tabItem(
         tabName = "upload",
         shiny::fluidRow(
@@ -143,13 +143,24 @@ ui <- shinydashboard::dashboardPage(
             width = 12,
             shiny::h2("Data Upload & Validation"),
             shiny::p(
-              "Upload your faculty roster file (CSV or Excel) containing names,",
-              "academic ranks, and external identifiers (Scopus ID, Google Scholar ID)."
+              "Build your faculty roster to analyze research productivity and impact metrics."
             ),
             shiny::div(
-              class = "alert alert-warning",
-              shiny::icon("exclamation-triangle"),
-              " Upload module is temporarily disabled. Please use the Import from File feature in the Resolution tab."
+              class = "alert alert-info",
+              shiny::icon("arrow-right"),
+              shiny::strong(" Go to Identity Resolution tab "),
+              "to build your roster. You can:",
+              shiny::tags$ul(
+                shiny::tags$li("Search OpenAlex for faculty members by name"),
+                shiny::tags$li("Add faculty manually with their details"),
+                shiny::tags$li("Import a roster from a CSV file")
+              )
+            ),
+            shiny::actionButton(
+              "go_to_resolution",
+              "Go to Identity Resolution",
+              icon = shiny::icon("arrow-right"),
+              class = "btn-primary btn-lg"
             )
           )
         )
@@ -345,6 +356,11 @@ server <- function(input, output, session) {
       shinydashboard::updateTabItems(session, "sidebar_menu", "resolution")
       upload_rv$proceed <- FALSE
     }
+  })
+
+  # Handle "Go to Resolution" button on upload tab
+  shiny::observeEvent(input$go_to_resolution, {
+    shinydashboard::updateTabItems(session, "sidebar_menu", "resolution")
   })
 
   # ---------------------------------------------------------------------------

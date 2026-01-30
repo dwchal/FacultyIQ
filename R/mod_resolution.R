@@ -11,135 +11,148 @@ mod_resolution_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::tagList(
-    shiny::fluidRow(
-      shiny::column(
-        width = 12,
-        shiny::wellPanel(
-          shiny::h4("Identity Resolution Status"),
-          shiny::p(
-            "This step maps roster entries to unique author identifiers in OpenAlex.",
-            "Records with Scopus IDs can be resolved automatically.",
-            "Others require manual selection from search results."
-          ),
-          shiny::fluidRow(
-            shiny::column(
-              width = 3,
-              shinydashboard::valueBoxOutput(ns("vb_total"), width = 12)
+    # =========================================================================
+    # Build Roster Section (shown when no roster loaded)
+    # =========================================================================
+    shiny::uiOutput(ns("build_roster_ui")),
+
+    # =========================================================================
+    # Resolution Section (shown when roster exists)
+    # =========================================================================
+    shiny::conditionalPanel(
+      condition = sprintf("output['%s'] == true", ns("has_roster")),
+      ns = ns,
+
+      shiny::fluidRow(
+        shiny::column(
+          width = 12,
+          shiny::wellPanel(
+            shiny::h4("Identity Resolution Status"),
+            shiny::p(
+              "This step maps roster entries to unique author identifiers in OpenAlex.",
+              "Records with Scopus IDs can be resolved automatically.",
+              "Others require manual selection from search results."
             ),
-            shiny::column(
-              width = 3,
-              shinydashboard::valueBoxOutput(ns("vb_resolved"), width = 12)
-            ),
-            shiny::column(
-              width = 3,
-              shinydashboard::valueBoxOutput(ns("vb_pending"), width = 12)
-            ),
-            shiny::column(
-              width = 3,
-              shinydashboard::valueBoxOutput(ns("vb_failed"), width = 12)
+            shiny::fluidRow(
+              shiny::column(
+                width = 3,
+                shinydashboard::valueBoxOutput(ns("vb_total"), width = 12)
+              ),
+              shiny::column(
+                width = 3,
+                shinydashboard::valueBoxOutput(ns("vb_resolved"), width = 12)
+              ),
+              shiny::column(
+                width = 3,
+                shinydashboard::valueBoxOutput(ns("vb_pending"), width = 12)
+              ),
+              shiny::column(
+                width = 3,
+                shinydashboard::valueBoxOutput(ns("vb_failed"), width = 12)
+              )
             )
           )
-        )
-      )
-    ),
-
-    shiny::fluidRow(
-      shiny::column(
-        width = 12,
-        shiny::wellPanel(
-          shiny::h4("Auto-Resolution"),
-          shiny::p(
-            "Automatically resolve records with Scopus IDs to OpenAlex identities."
-          ),
-          shiny::actionButton(
-            ns("auto_resolve_btn"),
-            "Auto-Resolve via Scopus IDs",
-            class = "btn-primary"
-          ),
-          shiny::span(
-            shiny::textOutput(ns("auto_resolve_status")),
-            style = "margin-left: 20px;"
-          )
-        )
-      )
-    ),
-
-    shiny::hr(),
-
-    shiny::fluidRow(
-      shiny::column(
-        width = 6,
-        shiny::wellPanel(
-          shiny::h4("Resolution Table"),
-          shiny::helpText(
-            "Click a row to manually resolve or override.",
-            shiny::br(),
-            "Status: ",
-            shiny::span("pending", style = "color: orange;"), " | ",
-            shiny::span("resolved", style = "color: green;"), " | ",
-            shiny::span("manual", style = "color: blue;"), " | ",
-            shiny::span("failed", style = "color: red;"), " | ",
-            shiny::span("skipped", style = "color: gray;")
-          ),
-          DT::dataTableOutput(ns("resolution_table"))
         )
       ),
-      shiny::column(
-        width = 6,
-        shiny::wellPanel(
-          shiny::h4("Manual Resolution"),
-          shiny::uiOutput(ns("manual_resolution_ui"))
-        )
-      )
-    ),
 
-    shiny::hr(),
-
-    shiny::fluidRow(
-      shiny::column(
-        width = 12,
-        shiny::wellPanel(
-          shiny::fluidRow(
-            shiny::column(
-              width = 6,
-              shiny::actionButton(
-                ns("save_mappings_btn"),
-                "Save Mappings",
-                class = "btn-info"
-              ),
-              shiny::downloadButton(
-                ns("export_mappings_btn"),
-                "Export Mappings CSV"
-              )
+      shiny::fluidRow(
+        shiny::column(
+          width = 12,
+          shiny::wellPanel(
+            shiny::h4("Auto-Resolution"),
+            shiny::p(
+              "Automatically resolve records with Scopus IDs to OpenAlex identities."
             ),
-            shiny::column(
-              width = 6,
-              shiny::actionButton(
-                ns("fetch_data_btn"),
-                "Fetch Data for Resolved Authors",
-                class = "btn-success btn-lg"
-              ),
-              shiny::helpText("This will query APIs for all resolved authors")
+            shiny::actionButton(
+              ns("auto_resolve_btn"),
+              "Auto-Resolve via Scopus IDs",
+              class = "btn-primary"
+            ),
+            shiny::span(
+              shiny::textOutput(ns("auto_resolve_status")),
+              style = "margin-left: 20px;"
             )
           )
         )
-      )
-    ),
+      ),
 
-    # Progress indicator
-    shiny::conditionalPanel(
-      condition = sprintf("output['%s'] == true", ns("fetching")),
-      shiny::wellPanel(
-        shiny::h4("Fetching Data..."),
-        shiny::div(
-          class = "progress",
-          shiny::div(
-            class = "progress-bar progress-bar-striped active",
-            role = "progressbar",
-            style = "width: 100%"
+      shiny::hr(),
+
+      shiny::fluidRow(
+        shiny::column(
+          width = 6,
+          shiny::wellPanel(
+            shiny::h4("Resolution Table"),
+            shiny::helpText(
+              "Click a row to manually resolve or override.",
+              shiny::br(),
+              "Status: ",
+              shiny::span("pending", style = "color: orange;"), " | ",
+              shiny::span("resolved", style = "color: green;"), " | ",
+              shiny::span("manual", style = "color: blue;"), " | ",
+              shiny::span("failed", style = "color: red;"), " | ",
+              shiny::span("skipped", style = "color: gray;")
+            ),
+            DT::dataTableOutput(ns("resolution_table"))
           )
         ),
-        shiny::verbatimTextOutput(ns("fetch_log"))
+        shiny::column(
+          width = 6,
+          shiny::wellPanel(
+            shiny::h4("Manual Resolution"),
+            shiny::uiOutput(ns("manual_resolution_ui"))
+          )
+        )
+      ),
+
+      shiny::hr(),
+
+      shiny::fluidRow(
+        shiny::column(
+          width = 12,
+          shiny::wellPanel(
+            shiny::fluidRow(
+              shiny::column(
+                width = 6,
+                shiny::actionButton(
+                  ns("save_mappings_btn"),
+                  "Save Mappings",
+                  class = "btn-info"
+                ),
+                shiny::downloadButton(
+                  ns("export_mappings_btn"),
+                  "Export Mappings CSV"
+                )
+              ),
+              shiny::column(
+                width = 6,
+                shiny::actionButton(
+                  ns("fetch_data_btn"),
+                  "Fetch Data for Resolved Authors",
+                  class = "btn-success btn-lg"
+                ),
+                shiny::helpText("This will query APIs for all resolved authors")
+              )
+            )
+          )
+        )
+      ),
+
+      # Progress indicator
+      shiny::conditionalPanel(
+        condition = sprintf("output['%s'] == true", ns("fetching")),
+        shiny::wellPanel(
+          shiny::h4("Fetching Data..."),
+          shiny::div(
+            class = "progress",
+            shiny::div(
+              class = "progress-bar progress-bar-striped active",
+              role = "progressbar",
+              style = "width: 100%"
+            )
+          ),
+          shiny::verbatimTextOutput(ns("fetch_log"))
+        )
       )
     )
   )
@@ -161,8 +174,447 @@ mod_resolution_server <- function(id, roster_rv) {
       search_results = NULL,
       person_data = NULL,
       fetching = FALSE,
-      fetch_log = character()
+      fetch_log = character(),
+      # For roster building
+      build_search_results = NULL,
+      manual_roster = NULL
     )
+
+    # =========================================================================
+    # Roster Building Section
+    # =========================================================================
+
+    # Output to control conditional panel visibility
+    output$has_roster <- shiny::reactive({
+      !is.null(roster_rv$roster)
+    })
+    shiny::outputOptions(output, "has_roster", suspendWhenHidden = FALSE)
+
+    # Build Roster UI - shown when no roster is loaded
+    output$build_roster_ui <- shiny::renderUI({
+      # Only show when no roster is loaded
+      if (!is.null(roster_rv$roster)) {
+        return(NULL)
+      }
+
+      shiny::tagList(
+        shiny::fluidRow(
+          shiny::column(
+            width = 12,
+            shiny::div(
+              class = "alert alert-info",
+              shiny::icon("info-circle"),
+              shiny::strong(" Getting Started: "),
+              "Build your faculty roster by searching OpenAlex, entering details manually, or importing a CSV file."
+            )
+          )
+        ),
+
+        shiny::fluidRow(
+          # Left column: Search and Add
+          shiny::column(
+            width = 6,
+            shiny::wellPanel(
+              shiny::h4(shiny::icon("search"), " Search OpenAlex"),
+              shiny::p("Search for faculty members by name and add them to your roster."),
+              shiny::fluidRow(
+                shiny::column(
+                  width = 8,
+                  shiny::textInput(
+                    ns("build_search_name"),
+                    "Faculty Name",
+                    placeholder = "e.g., John Smith"
+                  )
+                ),
+                shiny::column(
+                  width = 4,
+                  shiny::textInput(
+                    ns("build_search_inst"),
+                    "Institution",
+                    placeholder = "(optional)"
+                  )
+                )
+              ),
+              shiny::actionButton(
+                ns("build_search_btn"),
+                "Search",
+                icon = shiny::icon("search"),
+                class = "btn-primary"
+              ),
+              shiny::hr(),
+              shiny::uiOutput(ns("build_search_results_ui"))
+            ),
+
+            shiny::wellPanel(
+              shiny::h4(shiny::icon("user-plus"), " Add Manually"),
+              shiny::p("Add a faculty member without searching."),
+              shiny::textInput(ns("manual_name"), "Name *", placeholder = "Full name"),
+              shiny::textInput(ns("manual_email"), "Email", placeholder = "email@university.edu"),
+              shiny::selectInput(
+                ns("manual_rank"),
+                "Academic Rank",
+                choices = c(
+                  "" = "",
+                  "Instructor" = "Instructor",
+                  "Assistant Professor" = "Assistant Professor",
+                  "Associate Professor" = "Associate Professor",
+                  "Full Professor" = "Full Professor",
+                  "Research Faculty" = "Research Faculty",
+                  "Clinical Faculty" = "Clinical Faculty",
+                  "Adjunct" = "Adjunct",
+                  "Emeritus" = "Emeritus"
+                )
+              ),
+              shiny::fluidRow(
+                shiny::column(
+                  width = 6,
+                  shiny::textInput(ns("manual_scopus"), "Scopus ID", placeholder = "e.g., 7004567890")
+                ),
+                shiny::column(
+                  width = 6,
+                  shiny::textInput(ns("manual_scholar"), "Scholar ID", placeholder = "e.g., ABC123def")
+                )
+              ),
+              shiny::actionButton(
+                ns("manual_add_btn"),
+                "Add to Roster",
+                icon = shiny::icon("plus"),
+                class = "btn-success"
+              )
+            )
+          ),
+
+          # Right column: Current Roster and Import
+          shiny::column(
+            width = 6,
+            shiny::wellPanel(
+              shiny::h4(shiny::icon("users"), " Current Roster"),
+              shiny::p(
+                shiny::textOutput(ns("roster_count"), inline = TRUE),
+                " faculty member(s) added"
+              ),
+              DT::dataTableOutput(ns("roster_preview")),
+              shiny::br(),
+              shiny::fluidRow(
+                shiny::column(
+                  width = 4,
+                  shiny::actionButton(
+                    ns("roster_remove_btn"),
+                    "Remove Selected",
+                    icon = shiny::icon("trash"),
+                    class = "btn-warning btn-sm"
+                  )
+                ),
+                shiny::column(
+                  width = 4,
+                  shiny::actionButton(
+                    ns("roster_clear_btn"),
+                    "Clear All",
+                    icon = shiny::icon("times"),
+                    class = "btn-danger btn-sm"
+                  )
+                ),
+                shiny::column(
+                  width = 4,
+                  shiny::actionButton(
+                    ns("roster_done_btn"),
+                    "Done Building",
+                    icon = shiny::icon("check"),
+                    class = "btn-success"
+                  )
+                )
+              )
+            ),
+
+            shiny::wellPanel(
+              shiny::h4(shiny::icon("file-import"), " Import from File"),
+              shiny::p("Import a roster from CSV file."),
+              shiny::fileInput(
+                ns("import_file"),
+                "Choose CSV file",
+                accept = c(".csv", "text/csv")
+              ),
+              shiny::helpText(
+                "CSV should have columns: name (required), email, academic_rank, scopus_id, scholar_id"
+              )
+            )
+          )
+        )
+      )
+    })
+
+    # Search OpenAlex for authors
+    shiny::observeEvent(input$build_search_btn, {
+      name <- trimws(null_coalesce(input$build_search_name, ""))
+      if (nchar(name) < 2) {
+        shiny::showNotification("Please enter at least 2 characters", type = "warning")
+        return()
+      }
+
+      shiny::withProgress(message = "Searching OpenAlex...", {
+        inst <- if (!is.null(input$build_search_inst) && nchar(trimws(input$build_search_inst)) > 0) {
+          trimws(input$build_search_inst)
+        } else {
+          NULL
+        }
+
+        results <- search_openalex_authors(name, institution = inst, limit = 10)
+        rv$build_search_results <- results
+      })
+
+      if (is.null(rv$build_search_results) || nrow(rv$build_search_results) == 0) {
+        shiny::showNotification("No results found", type = "warning")
+      }
+    })
+
+    # Display search results
+    output$build_search_results_ui <- shiny::renderUI({
+      if (is.null(rv$build_search_results) || nrow(rv$build_search_results) == 0) {
+        return(shiny::helpText("Search results will appear here"))
+      }
+
+      shiny::tagList(
+        shiny::h5("Search Results"),
+        DT::dataTableOutput(ns("build_search_table")),
+        shiny::br(),
+        shiny::actionButton(
+          ns("build_add_selected_btn"),
+          "Add Selected to Roster",
+          icon = shiny::icon("plus"),
+          class = "btn-success"
+        )
+      )
+    })
+
+    output$build_search_table <- DT::renderDataTable({
+      req(rv$build_search_results)
+
+      display_df <- rv$build_search_results
+      if (nrow(display_df) > 0) {
+        display_df <- display_df %>%
+          dplyr::mutate(
+            works = format(works_count, big.mark = ","),
+            citations = format(cited_by_count, big.mark = ","),
+            inst = ifelse(is.na(affiliation), "-", stringr::str_trunc(affiliation, 30))
+          ) %>%
+          dplyr::select(display_name, inst, works, citations)
+      }
+
+      DT::datatable(
+        display_df,
+        selection = "single",
+        options = list(pageLength = 5, dom = "t", scrollX = TRUE),
+        rownames = FALSE,
+        colnames = c("Name", "Institution", "Works", "Citations")
+      )
+    })
+
+    # Add selected search result to roster
+    shiny::observeEvent(input$build_add_selected_btn, {
+      selected_idx <- input$build_search_table_rows_selected
+      if (is.null(selected_idx) || length(selected_idx) == 0) {
+        shiny::showNotification("Please select an author from the search results", type = "warning")
+        return()
+      }
+
+      selected <- rv$build_search_results[selected_idx, ]
+
+      new_row <- data.frame(
+        id = if (is.null(rv$manual_roster)) 1L else max(rv$manual_roster$id) + 1L,
+        name = selected$display_name,
+        email = NA_character_,
+        academic_rank = NA_character_,
+        last_promotion = NA_character_,
+        reaims_pubs = NA_integer_,
+        scopus_id = NA_character_,
+        scholar_id = NA_character_,
+        associations = NA_character_,
+        openalex_id = selected$openalex_id,
+        resolution_status = "resolved",
+        resolution_method = "search_add",
+        stringsAsFactors = FALSE
+      )
+
+      if (is.null(rv$manual_roster)) {
+        rv$manual_roster <- new_row
+      } else {
+        rv$manual_roster <- dplyr::bind_rows(rv$manual_roster, new_row)
+      }
+
+      shiny::showNotification(sprintf("Added %s", selected$display_name), type = "message")
+      rv$build_search_results <- NULL
+    })
+
+    # Add manual entry to roster
+    shiny::observeEvent(input$manual_add_btn, {
+      name <- trimws(null_coalesce(input$manual_name, ""))
+      if (nchar(name) < 2) {
+        shiny::showNotification("Please enter a name", type = "error")
+        return()
+      }
+
+      new_row <- data.frame(
+        id = if (is.null(rv$manual_roster)) 1L else max(rv$manual_roster$id) + 1L,
+        name = name,
+        email = null_coalesce(trimws(input$manual_email), NA_character_),
+        academic_rank = if (!is.null(input$manual_rank) && input$manual_rank != "") input$manual_rank else NA_character_,
+        last_promotion = NA_character_,
+        reaims_pubs = NA_integer_,
+        scopus_id = null_coalesce(trimws(input$manual_scopus), NA_character_),
+        scholar_id = null_coalesce(trimws(input$manual_scholar), NA_character_),
+        associations = NA_character_,
+        openalex_id = NA_character_,
+        resolution_status = "pending",
+        resolution_method = "manual_entry",
+        stringsAsFactors = FALSE
+      )
+
+      if (is.null(rv$manual_roster)) {
+        rv$manual_roster <- new_row
+      } else {
+        rv$manual_roster <- dplyr::bind_rows(rv$manual_roster, new_row)
+      }
+
+      shiny::showNotification(sprintf("Added %s", name), type = "message")
+
+      # Clear form
+      shiny::updateTextInput(session, "manual_name", value = "")
+      shiny::updateTextInput(session, "manual_email", value = "")
+      shiny::updateSelectInput(session, "manual_rank", selected = "")
+      shiny::updateTextInput(session, "manual_scopus", value = "")
+      shiny::updateTextInput(session, "manual_scholar", value = "")
+    })
+
+    # Roster count
+    output$roster_count <- shiny::renderText({
+      if (is.null(rv$manual_roster)) 0 else nrow(rv$manual_roster)
+    })
+
+    # Roster preview table
+    output$roster_preview <- DT::renderDataTable({
+      if (is.null(rv$manual_roster) || nrow(rv$manual_roster) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No faculty added yet"),
+          options = list(dom = "t"),
+          rownames = FALSE
+        ))
+      }
+
+      display_df <- rv$manual_roster %>%
+        dplyr::select(id, name, academic_rank, resolution_status)
+
+      DT::datatable(
+        display_df,
+        selection = "single",
+        options = list(pageLength = 10, dom = "tp", scrollX = TRUE),
+        rownames = FALSE,
+        colnames = c("ID", "Name", "Rank", "Status")
+      )
+    })
+
+    # Remove selected from roster
+    shiny::observeEvent(input$roster_remove_btn, {
+      selected_idx <- input$roster_preview_rows_selected
+      if (is.null(selected_idx) || is.null(rv$manual_roster)) {
+        shiny::showNotification("Please select a row to remove", type = "warning")
+        return()
+      }
+
+      removed_name <- rv$manual_roster$name[selected_idx]
+      rv$manual_roster <- rv$manual_roster[-selected_idx, ]
+      if (nrow(rv$manual_roster) == 0) {
+        rv$manual_roster <- NULL
+      }
+
+      shiny::showNotification(sprintf("Removed %s", removed_name), type = "message")
+    })
+
+    # Clear roster
+    shiny::observeEvent(input$roster_clear_btn, {
+      rv$manual_roster <- NULL
+      shiny::showNotification("Roster cleared", type = "message")
+    })
+
+    # Done building roster - transfer to main roster
+    shiny::observeEvent(input$roster_done_btn, {
+      if (is.null(rv$manual_roster) || nrow(rv$manual_roster) == 0) {
+        shiny::showNotification("Please add at least one faculty member", type = "warning")
+        return()
+      }
+
+      roster_rv$roster <- rv$manual_roster
+      roster_rv$ready <- TRUE
+
+      shiny::showNotification(
+        sprintf("Roster created with %d faculty member(s)", nrow(rv$manual_roster)),
+        type = "message"
+      )
+    })
+
+    # Import from CSV
+    shiny::observeEvent(input$import_file, {
+      req(input$import_file)
+
+      tryCatch({
+        data <- readr::read_csv(input$import_file$datapath, show_col_types = FALSE)
+        data <- as.data.frame(data)
+
+        # Check for required name column
+        name_col <- intersect(c("name", "Name", "NAME", "full_name", "faculty_name"), names(data))
+        if (length(name_col) == 0) {
+          shiny::showNotification("CSV must have a 'name' column", type = "error")
+          return()
+        }
+
+        # Standardize column names
+        names(data) <- tolower(names(data))
+
+        # Build roster from imported data
+        imported_roster <- data.frame(
+          id = seq_len(nrow(data)),
+          name = data$name,
+          email = if ("email" %in% names(data)) data$email else NA_character_,
+          academic_rank = if ("academic_rank" %in% names(data)) data$academic_rank else NA_character_,
+          last_promotion = if ("last_promotion" %in% names(data)) as.character(data$last_promotion) else NA_character_,
+          reaims_pubs = if ("reaims_pubs" %in% names(data)) as.integer(data$reaims_pubs) else NA_integer_,
+          scopus_id = if ("scopus_id" %in% names(data)) as.character(data$scopus_id) else NA_character_,
+          scholar_id = if ("scholar_id" %in% names(data)) as.character(data$scholar_id) else NA_character_,
+          associations = if ("associations" %in% names(data)) data$associations else NA_character_,
+          openalex_id = if ("openalex_id" %in% names(data)) data$openalex_id else NA_character_,
+          resolution_status = if ("openalex_id" %in% names(data) && any(!is.na(data$openalex_id))) {
+            ifelse(!is.na(data$openalex_id) & data$openalex_id != "", "resolved", "pending")
+          } else {
+            "pending"
+          },
+          resolution_method = "import",
+          stringsAsFactors = FALSE
+        )
+
+        # Add to existing manual roster or replace
+        if (is.null(rv$manual_roster)) {
+          rv$manual_roster <- imported_roster
+        } else {
+          # Adjust IDs to continue from existing
+          imported_roster$id <- imported_roster$id + max(rv$manual_roster$id)
+          rv$manual_roster <- dplyr::bind_rows(rv$manual_roster, imported_roster)
+        }
+
+        shiny::showNotification(
+          sprintf("Imported %d faculty members from CSV", nrow(imported_roster)),
+          type = "message"
+        )
+
+      }, error = function(e) {
+        shiny::showNotification(
+          paste("Error importing CSV:", e$message),
+          type = "error"
+        )
+      })
+    })
+
+    # =========================================================================
+    # Resolution Section (existing functionality)
+    # =========================================================================
 
     # Initialize resolution data frame when roster is available
     shiny::observe({

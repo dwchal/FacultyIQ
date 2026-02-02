@@ -848,6 +848,8 @@ mod_resolution_server <- function(id, roster_rv) {
           "Status: ", shiny::strong(row$resolution_status),
           if (!is.na(row$openalex_id) && row$openalex_id != "") {
             sprintf(" (OpenAlex: %s)", row$openalex_id)
+          } else {
+            NULL
           }
         ),
 
@@ -892,6 +894,8 @@ mod_resolution_server <- function(id, roster_rv) {
             class = "alert alert-warning",
             "No results found. Try a different search term or skip this record."
           )
+        } else {
+          NULL
         },
 
         shiny::hr(),

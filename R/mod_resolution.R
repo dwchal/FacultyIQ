@@ -419,6 +419,18 @@ mod_resolution_server <- function(id, roster_rv) {
 
       selected <- rv$build_search_results[selected_idx, ]
 
+      # Normalize OpenAlex ID to consistent format
+      openalex_id <- selected$openalex_id
+      if (!is.null(openalex_id) && !is.na(openalex_id) && openalex_id != "") {
+        # Extract just the ID part if URL format
+        if (grepl("^https://", openalex_id, ignore.case = TRUE)) {
+          openalex_id <- sub("^https://openalex.org/", "", openalex_id, ignore.case = TRUE)
+        }
+        # Uppercase the A prefix and rebuild URL
+        openalex_id <- paste0("A", sub("^[Aa]", "", openalex_id))
+        openalex_id <- paste0("https://openalex.org/", openalex_id)
+      }
+
       # Compute next ID
       next_id <- 1L
       if (!is.null(rv$manual_roster)) {
@@ -435,7 +447,7 @@ mod_resolution_server <- function(id, roster_rv) {
         scopus_id = NA_character_,
         scholar_id = NA_character_,
         associations = NA_character_,
-        openalex_id = selected$openalex_id,
+        openalex_id = openalex_id,
         resolution_status = "resolved",
         resolution_method = "search_add",
         stringsAsFactors = FALSE
@@ -598,6 +610,19 @@ mod_resolution_server <- function(id, roster_rv) {
         scholar_col <- if ("scholar_id" %in% col_names) as.character(data$scholar_id) else rep(NA_character_, n_rows)
         assoc_col <- if ("associations" %in% col_names) data$associations else rep(NA_character_, n_rows)
         oalex_col <- if ("openalex_id" %in% col_names) data$openalex_id else rep(NA_character_, n_rows)
+
+        # Normalize OpenAlex IDs to consistent format
+        oalex_col <- sapply(oalex_col, function(openalex_id) {
+          if (is.null(openalex_id) || is.na(openalex_id) || openalex_id == "") {
+            return(NA_character_)
+          }
+          openalex_id <- as.character(openalex_id)
+          if (grepl("^https://", openalex_id, ignore.case = TRUE)) {
+            openalex_id <- sub("^https://openalex.org/", "", openalex_id, ignore.case = TRUE)
+          }
+          openalex_id <- paste0("A", sub("^[Aa]", "", openalex_id))
+          paste0("https://openalex.org/", openalex_id)
+        }, USE.NAMES = FALSE)
 
         # Determine resolution status
         status_col <- rep("pending", n_rows)
@@ -790,7 +815,16 @@ mod_resolution_server <- function(id, roster_rv) {
             result <- get_openalex_by_scopus(rv$resolution_df$scopus_id[idx])
 
             if (!is.null(result)) {
-              rv$resolution_df$openalex_id[idx] <- result$openalex_id
+              # Normalize OpenAlex ID to consistent format
+              openalex_id <- result$openalex_id
+              if (!is.null(openalex_id) && !is.na(openalex_id) && openalex_id != "") {
+                if (grepl("^https://", openalex_id, ignore.case = TRUE)) {
+                  openalex_id <- sub("^https://openalex.org/", "", openalex_id, ignore.case = TRUE)
+                }
+                openalex_id <- paste0("A", sub("^[Aa]", "", openalex_id))
+                openalex_id <- paste0("https://openalex.org/", openalex_id)
+              }
+              rv$resolution_df$openalex_id[idx] <- openalex_id
               rv$resolution_df$openalex_name[idx] <- result$display_name
               rv$resolution_df$openalex_works[idx] <- result$works_count
               rv$resolution_df$openalex_citations[idx] <- result$cited_by_count
@@ -955,7 +989,17 @@ mod_resolution_server <- function(id, roster_rv) {
       selected_result <- rv$search_results[input$search_results_table_rows_selected, ]
       idx <- rv$selected_row
 
-      rv$resolution_df$openalex_id[idx] <- selected_result$openalex_id
+      # Normalize OpenAlex ID to consistent format
+      openalex_id <- selected_result$openalex_id
+      if (!is.null(openalex_id) && !is.na(openalex_id) && openalex_id != "") {
+        if (grepl("^https://", openalex_id, ignore.case = TRUE)) {
+          openalex_id <- sub("^https://openalex.org/", "", openalex_id, ignore.case = TRUE)
+        }
+        openalex_id <- paste0("A", sub("^[Aa]", "", openalex_id))
+        openalex_id <- paste0("https://openalex.org/", openalex_id)
+      }
+
+      rv$resolution_df$openalex_id[idx] <- openalex_id
       rv$resolution_df$openalex_name[idx] <- selected_result$display_name
       rv$resolution_df$openalex_works[idx] <- selected_result$works_count
       rv$resolution_df$openalex_citations[idx] <- selected_result$cited_by_count

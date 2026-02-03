@@ -249,13 +249,36 @@ mod_export_server <- function(id, resolution_rv, roster_rv) {
           dplyr::left_join(
             resolution_rv$resolution_df %>%
               dplyr::select(id, openalex_id, resolution_status, resolution_method),
-            by = "id"
+            by = "id",
+            suffix = c("", ".resolved")
           )
+
+        # Prefer resolved values from the resolution table
+        if ("openalex_id.resolved" %in% names(export_df)) {
+          export_df$openalex_id <- dplyr::coalesce(
+            export_df$openalex_id.resolved,
+            export_df$openalex_id
+          )
+          export_df$openalex_id.resolved <- NULL
+        }
+        if ("resolution_status.resolved" %in% names(export_df)) {
+          export_df$resolution_status <- dplyr::coalesce(
+            export_df$resolution_status.resolved,
+            export_df$resolution_status
+          )
+          export_df$resolution_status.resolved <- NULL
+        }
+        if ("resolution_method.resolved" %in% names(export_df)) {
+          export_df$resolution_method <- dplyr::coalesce(
+            export_df$resolution_method.resolved,
+            export_df$resolution_method
+          )
+          export_df$resolution_method.resolved <- NULL
+        }
 
         # Remove internal tracking columns
         export_df <- export_df %>%
-          dplyr::select(-dplyr::any_of(c("openalex_id.x", "resolution_status.x",
-                                         "resolution_method.x", "last_updated")))
+          dplyr::select(-dplyr::any_of(c("last_updated")))
 
         utils::write.csv(export_df, file, row.names = FALSE)
       }

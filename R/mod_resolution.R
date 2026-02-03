@@ -254,7 +254,7 @@ mod_resolution_server <- function(id, roster_rv) {
                 ns("manual_rank"),
                 "Academic Rank",
                 choices = c(
-                  "" = "",
+                  "",
                   "Instructor" = "Instructor",
                   "Assistant Professor" = "Assistant Professor",
                   "Associate Professor" = "Associate Professor",

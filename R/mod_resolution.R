@@ -175,6 +175,7 @@ mod_resolution_server <- function(id, roster_rv) {
       person_data = NULL,
       fetching = FALSE,
       fetch_log = character(),
+      auto_fetch_done = FALSE,
       # For roster building
       build_search_results = NULL,
       manual_roster = NULL
@@ -1124,27 +1125,25 @@ mod_resolution_server <- function(id, roster_rv) {
       }
     )
 
-    # Fetch data for resolved authors
-    shiny::observeEvent(input$fetch_data_btn, {
+    fetch_resolved_data <- function(show_empty_warning = TRUE) {
       req(rv$resolution_df)
 
-      # Get resolved records
       resolved <- rv$resolution_df %>%
         dplyr::filter(resolution_status %in% c("resolved", "manual"))
 
       if (nrow(resolved) == 0) {
-        shiny::showNotification(
-          "No resolved authors to fetch data for",
-          type = "warning"
-        )
-        return()
+        if (show_empty_warning) {
+          shiny::showNotification(
+            "No resolved authors to fetch data for",
+            type = "warning"
+          )
+        }
+        return(invisible(FALSE))
       }
 
       rv$fetching <- TRUE
       rv$fetch_log <- character()
 
-      # Prepare roster for fetching - use resolved openalex_id from resolution_df
-      # Remove any existing openalex_id column to avoid .x/.y suffix issues
       roster_base <- roster_rv$roster
       if ("openalex_id" %in% names(roster_base)) {
         roster_base <- roster_base %>% dplyr::select(-openalex_id)
@@ -1182,13 +1181,38 @@ mod_resolution_server <- function(id, roster_rv) {
       })
 
       rv$fetching <- FALSE
+      rv$auto_fetch_done <- TRUE
 
       n_success <- sum(sapply(rv$person_data, function(x) length(x$data_sources) > 0))
       shiny::showNotification(
         sprintf("Fetched data for %d of %d authors", n_success, nrow(roster_for_fetch)),
         type = "message"
       )
+
+      invisible(TRUE)
+    }
+
+    # Fetch data for resolved authors
+    shiny::observeEvent(input$fetch_data_btn, {
+      fetch_resolved_data()
     })
+
+    # Auto-fetch when a resolved manual roster is completed
+    shiny::observeEvent(roster_rv$roster, {
+      req(rv$resolution_df)
+      if (isTRUE(rv$auto_fetch_done)) {
+        return()
+      }
+
+      resolved <- rv$resolution_df %>%
+        dplyr::filter(resolution_status %in% c("resolved", "manual"))
+
+      if (nrow(resolved) == 0) {
+        return()
+      }
+
+      fetch_resolved_data(show_empty_warning = FALSE)
+    }, ignoreInit = TRUE)
 
     # Fetch log output
     output$fetch_log <- shiny::renderText({

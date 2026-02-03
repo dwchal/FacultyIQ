@@ -20,7 +20,7 @@ mod_resolution_ui <- function(id) {
     # Resolution Section (shown when roster exists)
     # =========================================================================
     shiny::conditionalPanel(
-      condition = sprintf("output['%s'] == true", ns("has_roster")),
+      condition = sprintf("output['%s'] != null", ns("has_roster")),
       ns = ns,
 
       shiny::fluidRow(
@@ -186,7 +186,11 @@ mod_resolution_server <- function(id, roster_rv) {
 
     # Output to control conditional panel visibility
     output$has_roster <- shiny::reactive({
-      !is.null(roster_rv$roster)
+      if (!is.null(roster_rv$roster)) {
+        "ready"
+      } else {
+        NULL
+      }
     })
     shiny::outputOptions(output, "has_roster", suspendWhenHidden = FALSE)
 

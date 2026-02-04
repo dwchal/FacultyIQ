@@ -375,10 +375,17 @@ def render_manual_resolution_panel(person_data: Dict):
 
 def apply_manual_resolution(person_data: Dict, author):
     """Apply a manual resolution selection"""
+    api = st.session_state.openalex_api
     identity_store = st.session_state.identity_store
 
     person = person_data.get("person", {})
     name = person.get("name", "Unknown")
+
+    # Fetch full author data to ensure we have complete summary_stats (h_index, etc.)
+    # Search results may not include all fields
+    full_author = api.get_author(author.id)
+    if full_author:
+        author = full_author
 
     person_data["openalex_author"] = author
     person_data["resolution_status"] = "resolved"
@@ -468,6 +475,8 @@ def render_manual_roster_builder():
 
 def add_to_manual_roster(author):
     """Add an author to the manual roster"""
+    api = st.session_state.openalex_api
+
     if "manual_roster" not in st.session_state:
         st.session_state["manual_roster"] = []
 
@@ -477,6 +486,11 @@ def add_to_manual_roster(author):
         st.warning(f"{author.display_name} is already in the roster")
         return
 
+    # Fetch full author data to ensure we have complete summary_stats (h_index, etc.)
+    full_author = api.get_author(author.id)
+    if full_author:
+        author = full_author
+
     institutions = author.last_known_institutions
     inst_name = institutions[0].get("display_name", "") if institutions else ""
 
@@ -485,6 +499,8 @@ def add_to_manual_roster(author):
         "openalex_id": author.id,
         "institution": inst_name,
         "rank": "",  # To be filled in
+        "h_index": author.h_index,
+        "i10_index": author.i10_index,
     })
 
     st.success(f"Added {author.display_name} to roster")

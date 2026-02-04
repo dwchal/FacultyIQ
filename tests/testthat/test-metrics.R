@@ -358,3 +358,214 @@ test_that("prepare_export_wide merges data correctly", {
   expect_true("works_count" %in% names(result))
   expect_equal(nrow(result), 2)
 })
+
+# -----------------------------------------------------------------------------
+# scalar_or_na Helper Function Tests
+# -----------------------------------------------------------------------------
+
+test_that("scalar_or_na returns scalar value unchanged", {
+  expect_equal(scalar_or_na(5), 5)
+  expect_equal(scalar_or_na("test"), "test")
+  expect_equal(scalar_or_na(TRUE), TRUE)
+})
+
+test_that("scalar_or_na extracts first element from vector", {
+  expect_equal(scalar_or_na(c(1, 2, 3)), 1)
+  expect_equal(scalar_or_na(c("a", "b")), "a")
+})
+
+test_that("scalar_or_na returns NA for NULL input", {
+  expect_true(is.na(scalar_or_na(NULL)))
+})
+
+test_that("scalar_or_na returns NA for empty vector", {
+  expect_true(is.na(scalar_or_na(character())))
+  expect_true(is.na(scalar_or_na(integer())))
+  expect_true(is.na(scalar_or_na(numeric())))
+})
+
+test_that("scalar_or_na respects custom NA type", {
+  result_int <- scalar_or_na(NULL, NA_integer_)
+  expect_true(is.na(result_int))
+  expect_true(is.integer(result_int))
+
+  result_char <- scalar_or_na(character(), NA_character_)
+  expect_true(is.na(result_char))
+  expect_true(is.character(result_char))
+
+  result_real <- scalar_or_na(NULL, NA_real_)
+  expect_true(is.na(result_real))
+  expect_true(is.numeric(result_real))
+})
+
+# -----------------------------------------------------------------------------
+# compute_all_metrics Edge Case Tests
+# -----------------------------------------------------------------------------
+
+test_that("compute_all_metrics returns empty df with correct columns for NULL input", {
+  roster <- data.frame(id = integer(), stringsAsFactors = FALSE)
+
+  result <- compute_all_metrics(NULL, roster)
+
+  expect_true(is.data.frame(result))
+  expect_equal(nrow(result), 0)
+
+  # Verify all expected columns are present
+  expected_cols <- c("roster_id", "name", "academic_rank", "works_count",
+                     "citations_count", "h_index", "i10_index",
+                     "citations_per_work", "works_per_year", "oa_percentage",
+                     "first_pub_year", "last_pub_year", "career_years",
+                     "reaims_pubs", "data_quality", "data_sources")
+
+  for (col in expected_cols) {
+    expect_true(col %in% names(result),
+                info = paste("Missing column:", col))
+  }
+})
+
+test_that("compute_all_metrics returns empty df with correct columns for empty list", {
+  roster <- data.frame(id = integer(), stringsAsFactors = FALSE)
+
+  result <- compute_all_metrics(list(), roster)
+
+  expect_true(is.data.frame(result))
+  expect_equal(nrow(result), 0)
+  expect_true("roster_id" %in% names(result))
+  expect_true("data_sources" %in% names(result))
+})
+
+test_that("compute_all_metrics handles person with NULL data_sources", {
+  person_data <- list(
+    name = "Test Person",
+    roster_id = 1,
+    openalex = list(
+      works_count = 10,
+      cited_by_count = 100,
+      h_index = 5,
+      i10_index = 3,
+      counts_by_year = NULL
+    ),
+    scholar = NULL,
+    works = NULL,
+    data_sources = NULL,  # NULL data_sources
+    errors = character()
+  )
+
+  roster <- data.frame(
+    id = 1,
+    name = "Test Person",
+    reaims_pubs = 8,
+    academic_rank = "Professor",
+    stringsAsFactors = FALSE
+  )
+
+  result <- compute_all_metrics(list(person_data), roster)
+
+  expect_equal(nrow(result), 1)
+  expect_true(is.na(result$data_sources[1]) || result$data_sources[1] == "")
+})
+
+test_that("compute_all_metrics handles person with empty character data_sources", {
+  person_data <- list(
+    name = "Test Person",
+    roster_id = 1,
+    openalex = NULL,
+    scholar = NULL,
+    works = NULL,
+    data_sources = character(),  # Empty character vector
+    errors = character()
+  )
+
+  roster <- data.frame(
+    id = 1,
+    name = "Test Person",
+    reaims_pubs = NA,
+    academic_rank = "Assistant",
+    stringsAsFactors = FALSE
+  )
+
+  result <- compute_all_metrics(list(person_data), roster)
+
+  expect_equal(nrow(result), 1)
+  # data_sources should be NA_character_ for empty vector
+  expect_true(is.na(result$data_sources[1]))
+})
+
+test_that("compute_all_metrics produces consistent row counts", {
+  # Create mixed person data - some with complete data, some with NULLs
+  person_data_list <- list(
+    list(
+      name = "Person 1",
+      roster_id = 1,
+      openalex = list(
+        works_count = 10,
+        cited_by_count = 100,
+        h_index = 5,
+        i10_index = 3,
+        counts_by_year = NULL
+      ),
+      scholar = NULL,
+      works = NULL,
+      data_sources = c("OpenAlex"),
+      errors = character()
+    ),
+    list(
+      name = "Person 2",
+      roster_id = 2,
+      openalex = NULL,
+      scholar = NULL,
+      works = NULL,
+      data_sources = NULL,  # NULL
+      errors = character()
+    ),
+    list(
+      name = "Person 3",
+      roster_id = 3,
+      openalex = NULL,
+      scholar = NULL,
+      works = NULL,
+      data_sources = character(),  # Empty
+      errors = character()
+    )
+  )
+
+  roster <- data.frame(
+    id = 1:3,
+    name = c("Person 1", "Person 2", "Person 3"),
+    reaims_pubs = c(10, NA, 5),
+    academic_rank = c("Full", "Assistant", "Associate"),
+    stringsAsFactors = FALSE
+  )
+
+  result <- compute_all_metrics(person_data_list, roster)
+
+  # Should have exactly 3 rows, one per person
+  expect_equal(nrow(result), 3)
+
+  # All rows should have valid types (no list columns)
+  expect_true(is.character(result$name))
+  expect_true(is.character(result$data_sources))
+  expect_true(is.integer(result$roster_id) || is.numeric(result$roster_id))
+})
+
+# -----------------------------------------------------------------------------
+# compute_person_metrics data_sources Tests
+# -----------------------------------------------------------------------------
+
+test_that("compute_person_metrics initializes data_sources as character for NULL", {
+  person_data <- list(
+    name = "Test",
+    roster_id = 1,
+    openalex = NULL,
+    scholar = NULL,
+    works = NULL,
+    data_sources = NULL,
+    errors = character()
+  )
+
+  result <- compute_person_metrics(person_data)
+
+  # data_sources should be character(), not NULL
+  expect_true(is.character(result$data_sources))
+  expect_equal(length(result$data_sources), 0)
+})

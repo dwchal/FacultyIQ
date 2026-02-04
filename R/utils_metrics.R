@@ -9,6 +9,26 @@
 # =============================================================================
 # These definitions are shown in the UI to explain each metric
 
+#' Safely extract a scalar value or return NA
+#'
+#' Utility function to safely extract the first element from a value,
+#' returning a specified NA type if the input is NULL or empty.
+#' This prevents issues when constructing data frames where NULL or
+#' zero-length vectors would cause row count mismatches.
+#'
+#' @param x Input value (scalar, vector, or NULL)
+#' @param na Default NA value to return if x is NULL or empty (default: NA)
+#' @return First element of x, or na if x is NULL/empty
+#' @examples
+#' scalar_or_na(5)          # returns 5
+#' scalar_or_na(NULL)       # returns NA
+#' scalar_or_na(character()) # returns NA
+#' scalar_or_na(NULL, NA_integer_) # returns NA_integer_
+scalar_or_na <- function(x, na = NA) {
+  if (is.null(x) || length(x) == 0) return(na)
+  x[[1]]
+}
+
 METRIC_DEFINITIONS <- list(
   works_count = list(
     name = "Total Works",
@@ -106,7 +126,9 @@ compute_person_metrics <- function(person_data, roster_row = NULL) {
     yearly_citations = NULL,
 
     # Data quality
-    data_sources = person_data$data_sources,
+    # Ensure data_sources is always a character vector (never NULL)
+    # This prevents downstream issues when binding rows or converting to data frame
+    data_sources = if (is.null(person_data$data_sources)) character() else person_data$data_sources,
     data_quality = "unknown",
     unavailable_reason = character()
   )
@@ -201,8 +223,34 @@ compute_person_metrics <- function(person_data, roster_row = NULL) {
 #'
 #' @param person_data_list List of person data from fetch_all_person_data()
 #' @param roster Original roster data frame
-#' @return Data frame with all computed metrics
+#' @return Data frame with all computed metrics. Returns an empty data frame
+#'   with the expected column structure if person_data_list is NULL or empty.
 compute_all_metrics <- function(person_data_list, roster) {
+
+  # Return empty data frame with expected columns if no data to compute
+  # This prevents downstream errors when the roster hasn't been processed yet
+  if (is.null(person_data_list) || length(person_data_list) == 0) {
+    return(data.frame(
+      roster_id = integer(),
+      name = character(),
+      academic_rank = character(),
+      works_count = integer(),
+      citations_count = integer(),
+      h_index = integer(),
+      i10_index = integer(),
+      citations_per_work = numeric(),
+      works_per_year = numeric(),
+      oa_percentage = numeric(),
+      first_pub_year = integer(),
+      last_pub_year = integer(),
+      career_years = integer(),
+      reaims_pubs = integer(),
+      data_quality = character(),
+      data_sources = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
   metrics_list <- lapply(seq_along(person_data_list), function(i) {
     person_data <- person_data_list[[i]]
     roster_row <- roster[roster$id == person_data$roster_id, ]
@@ -210,24 +258,34 @@ compute_all_metrics <- function(person_data_list, roster) {
 
     m <- compute_person_metrics(person_data, roster_row)
 
+    # Convert data_sources to a single string (or NA if empty)
+    # This ensures consistent column type across all rows
+    data_sources_str <- if (is.null(m$data_sources) || length(m$data_sources) == 0) {
+      NA_character_
+    } else {
+      paste(m$data_sources, collapse = ", ")
+    }
+
     # Convert to flat data frame row
+    # Use scalar_or_na() for all fields to prevent row count mismatches
+    # when any field is NULL or has zero length
     data.frame(
-      roster_id = m$roster_id,
-      name = m$name,
-      academic_rank = m$academic_rank,
-      works_count = m$works_count,
-      citations_count = m$citations_count,
-      h_index = m$h_index,
-      i10_index = m$i10_index,
-      citations_per_work = m$citations_per_work,
-      works_per_year = m$works_per_year,
-      oa_percentage = m$oa_percentage,
-      first_pub_year = m$first_pub_year,
-      last_pub_year = m$last_pub_year,
-      career_years = m$career_years,
-      reaims_pubs = m$reaims_pubs,
-      data_quality = m$data_quality,
-      data_sources = paste(m$data_sources, collapse = ", "),
+      roster_id = scalar_or_na(m$roster_id, NA_integer_),
+      name = scalar_or_na(m$name, NA_character_),
+      academic_rank = scalar_or_na(m$academic_rank, NA_character_),
+      works_count = scalar_or_na(m$works_count, NA_integer_),
+      citations_count = scalar_or_na(m$citations_count, NA_integer_),
+      h_index = scalar_or_na(m$h_index, NA_integer_),
+      i10_index = scalar_or_na(m$i10_index, NA_integer_),
+      citations_per_work = scalar_or_na(m$citations_per_work, NA_real_),
+      works_per_year = scalar_or_na(m$works_per_year, NA_real_),
+      oa_percentage = scalar_or_na(m$oa_percentage, NA_real_),
+      first_pub_year = scalar_or_na(m$first_pub_year, NA_integer_),
+      last_pub_year = scalar_or_na(m$last_pub_year, NA_integer_),
+      career_years = scalar_or_na(m$career_years, NA_integer_),
+      reaims_pubs = scalar_or_na(m$reaims_pubs, NA_integer_),
+      data_quality = scalar_or_na(m$data_quality, NA_character_),
+      data_sources = data_sources_str,
       stringsAsFactors = FALSE
     )
   })

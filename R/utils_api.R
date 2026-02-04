@@ -73,12 +73,39 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
       affiliations <- rep(NA_character_, n_authors)
     }
 
+    # Extract h_index and i10_index from summary_stats
+    h_indices <- vapply(seq_len(n_authors), function(i) {
+      if ("summary_stats" %in% names(authors) &&
+          !is.null(authors$summary_stats) &&
+          length(authors$summary_stats) >= i) {
+        stats <- authors$summary_stats[[i]]
+        if (is.list(stats) && !is.null(stats$h_index)) {
+          return(as.integer(stats$h_index))
+        }
+      }
+      return(NA_integer_)
+    }, FUN.VALUE = integer(1))
+
+    i10_indices <- vapply(seq_len(n_authors), function(i) {
+      if ("summary_stats" %in% names(authors) &&
+          !is.null(authors$summary_stats) &&
+          length(authors$summary_stats) >= i) {
+        stats <- authors$summary_stats[[i]]
+        if (is.list(stats) && !is.null(stats$i10_index)) {
+          return(as.integer(stats$i10_index))
+        }
+      }
+      return(NA_integer_)
+    }, FUN.VALUE = integer(1))
+
     # Standardize output format
     result <- data.frame(
       openalex_id = authors$id,
       display_name = authors$display_name,
       works_count = authors$works_count,
       cited_by_count = authors$cited_by_count,
+      h_index = h_indices,
+      i10_index = i10_indices,
       affiliation = affiliations,
       stringsAsFactors = FALSE
     )
@@ -115,12 +142,27 @@ get_openalex_by_scopus <- function(scopus_id) {
       return(NULL)
     }
 
+    # Extract h_index and i10_index from summary_stats
+    h_index <- NA_integer_
+    i10_index <- NA_integer_
+    if ("summary_stats" %in% names(authors) &&
+        !is.null(authors$summary_stats) &&
+        length(authors$summary_stats) >= 1) {
+      stats <- authors$summary_stats[[1]]
+      if (is.list(stats)) {
+        if (!is.null(stats$h_index)) h_index <- as.integer(stats$h_index)
+        if (!is.null(stats$i10_index)) i10_index <- as.integer(stats$i10_index)
+      }
+    }
+
     # Return first match
     result <- data.frame(
       openalex_id = authors$id[1],
       display_name = authors$display_name[1],
       works_count = authors$works_count[1],
       cited_by_count = authors$cited_by_count[1],
+      h_index = h_index,
+      i10_index = i10_index,
       affiliation = {
         inst <- authors$last_known_institution[[1]]
         if (is.null(inst) || length(inst) == 0) NA_character_

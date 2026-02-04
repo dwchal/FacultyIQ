@@ -400,9 +400,10 @@ mod_resolution_server <- function(id, roster_rv) {
           dplyr::mutate(
             works = format(works_count, big.mark = ","),
             citations = format(cited_by_count, big.mark = ","),
+            h_idx = ifelse(is.na(h_index), "-", as.character(h_index)),
             inst = ifelse(is.na(affiliation), "-", stringr::str_trunc(affiliation, 30))
           ) %>%
-          dplyr::select(display_name, inst, works, citations)
+          dplyr::select(display_name, inst, works, citations, h_idx)
       }
 
       DT::datatable(
@@ -410,7 +411,7 @@ mod_resolution_server <- function(id, roster_rv) {
         selection = "single",
         options = list(pageLength = 5, dom = "t", scrollX = TRUE),
         rownames = FALSE,
-        colnames = c("Name", "Institution", "Works", "Citations")
+        colnames = c("Name", "Institution", "Works", "Citations", "h-index")
       )
     })
 
@@ -974,15 +975,28 @@ mod_resolution_server <- function(id, roster_rv) {
     output$search_results_table <- DT::renderDataTable({
       req(rv$search_results)
 
+      display_df <- rv$search_results
+      if (nrow(display_df) > 0) {
+        display_df <- display_df %>%
+          dplyr::mutate(
+            works = format(works_count, big.mark = ","),
+            citations = format(cited_by_count, big.mark = ","),
+            h_idx = ifelse(is.na(h_index), "-", as.character(h_index)),
+            inst = ifelse(is.na(affiliation), "-", stringr::str_trunc(affiliation, 25))
+          ) %>%
+          dplyr::select(display_name, inst, works, citations, h_idx)
+      }
+
       DT::datatable(
-        rv$search_results,
+        display_df,
         selection = "single",
         options = list(
           pageLength = 5,
           scrollX = TRUE,
           dom = "t"
         ),
-        rownames = FALSE
+        rownames = FALSE,
+        colnames = c("Name", "Institution", "Works", "Citations", "h-index")
       )
     })
 

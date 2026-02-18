@@ -256,9 +256,12 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
           shiny::column(
             width = 2,
             shiny::wellPanel(
-              shiny::h3(sprintf("%d-%d",
-                                null_coalesce(metrics$first_pub_year, NA),
-                                null_coalesce(metrics$last_pub_year, NA))),
+              shiny::h3({
+                first_yr <- null_coalesce(metrics$first_pub_year, NA)
+                last_yr  <- null_coalesce(metrics$last_pub_year, NA)
+                if (is.na(first_yr) || is.na(last_yr)) "N/A"
+                else sprintf("%d\u2013%d", as.integer(first_yr), as.integer(last_yr))
+              }),
               shiny::p("Career Span")
             )
           )
@@ -393,9 +396,9 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
       # Filter by year
       works <- works %>%
         dplyr::filter(
-          is.na(publication_year) |
-            (publication_year >= input$works_year_filter[1] &
-               publication_year <= input$works_year_filter[2])
+          !is.na(publication_year) &
+            publication_year >= input$works_year_filter[1] &
+            publication_year <= input$works_year_filter[2]
         )
 
       # Sort

@@ -440,7 +440,7 @@ mod_resolution_server <- function(id, roster_rv) {
       # Compute next ID
       next_id <- 1L
       if (!is.null(rv$manual_roster)) {
-        next_id <- max(rv$manual_roster$id) + 1L
+        next_id <- max(rv$manual_roster$id, na.rm = TRUE) + 1L
       }
 
       new_row <- data.frame(
@@ -480,7 +480,7 @@ mod_resolution_server <- function(id, roster_rv) {
       # Compute next ID
       next_id <- 1L
       if (!is.null(rv$manual_roster)) {
-        next_id <- max(rv$manual_roster$id) + 1L
+        next_id <- max(rv$manual_roster$id, na.rm = TRUE) + 1L
       }
 
       # Get academic rank

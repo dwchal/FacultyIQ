@@ -167,7 +167,7 @@ get_openalex_by_scopus <- function(scopus_id) {
         inst <- authors$last_known_institution[[1]]
         if (is.null(inst) || length(inst) == 0) NA_character_
         else if (is.data.frame(inst)) inst$display_name[1]
-        else if (is.list(inst)) inst$display_name
+        else if (is.list(inst)) inst$display_name[1]
         else NA_character_
       },
       stringsAsFactors = FALSE
@@ -214,7 +214,7 @@ get_openalex_author <- function(openalex_id) {
         inst <- author$last_known_institution[[1]]
         if (is.null(inst)) NA_character_
         else if (is.data.frame(inst)) inst$display_name[1]
-        else if (is.list(inst)) inst$display_name
+        else if (is.list(inst)) inst$display_name[1]
         else NA_character_
       },
       counts_by_year = counts_by_year
@@ -239,16 +239,6 @@ get_openalex_works <- function(openalex_id, from_year = NULL, to_year = NULL, li
   }
 
   tryCatch({
-    # Build filter
-    filter_list <- list(author.id = openalex_id)
-
-    if (!is.null(from_year)) {
-      filter_list$from_publication_date <- paste0(from_year, "-01-01")
-    }
-    if (!is.null(to_year)) {
-      filter_list$to_publication_date <- paste0(to_year, "-12-31")
-    }
-
     works <- openalexR::oa_fetch(
       entity = "works",
       author.id = openalex_id,

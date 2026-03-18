@@ -36,3 +36,13 @@ Thumbs.db
 
 # Shiny logs
 shiny-app.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.mypy_cache/

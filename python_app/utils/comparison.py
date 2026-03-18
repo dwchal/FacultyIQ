@@ -241,7 +241,7 @@ def create_comparison_summary(
     metrics = ["total_works", "total_citations", "h_index", "works_per_year"]
 
     for metric in metrics:
-        if metric in comparison.columns:
+        if metric in comparison.columns and comparison[metric].notna().any():
             max_idx = comparison[metric].idxmax()
             leaders[metric] = {
                 "name": comparison.loc[max_idx, "name"],

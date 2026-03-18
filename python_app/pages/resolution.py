@@ -272,7 +272,7 @@ def render_resolution_table():
         }
         return colors.get(val, "")
 
-    styled_df = df.style.applymap(color_status, subset=["Status"])
+    styled_df = df.style.map(color_status, subset=["Status"])
 
     st.dataframe(
         styled_df,

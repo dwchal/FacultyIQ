@@ -27,7 +27,16 @@ mod_resolution_ui <- function(id) {
         shiny::column(
           width = 12,
           shiny::wellPanel(
-            shiny::h4("Identity Resolution Status"),
+            shiny::div(
+              style = "display: flex; justify-content: space-between; align-items: center;",
+              shiny::h4("Identity Resolution Status"),
+              shiny::actionButton(
+                ns("add_more_faculty_btn"),
+                "Add More Faculty",
+                icon = shiny::icon("user-plus"),
+                class = "btn-info btn-sm"
+              )
+            ),
             shiny::p(
               "This step maps roster entries to unique author identifiers in OpenAlex.",
               "Records with Scopus IDs can be resolved automatically.",
@@ -178,7 +187,8 @@ mod_resolution_server <- function(id, roster_rv) {
       auto_fetch_done = FALSE,
       # For roster building
       build_search_results = NULL,
-      manual_roster = NULL
+      manual_roster = NULL,
+      show_roster_builder = FALSE
     )
 
     # =========================================================================
@@ -195,10 +205,10 @@ mod_resolution_server <- function(id, roster_rv) {
     })
     shiny::outputOptions(output, "has_roster", suspendWhenHidden = FALSE)
 
-    # Build Roster UI - shown when no roster is loaded
+    # Build Roster UI - shown when no roster is loaded or user wants to add more
     output$build_roster_ui <- shiny::renderUI({
-      # Only show when no roster is loaded
-      if (!is.null(roster_rv$roster)) {
+      # Only show when no roster is loaded, or user explicitly wants to add more
+      if (!is.null(roster_rv$roster) && !isTRUE(rv$show_roster_builder)) {
         return(NULL)
       }
 
@@ -346,6 +356,12 @@ mod_resolution_server <- function(id, roster_rv) {
           )
         )
       )
+    })
+
+    # Add more faculty button (shown in resolution section)
+    shiny::observeEvent(input$add_more_faculty_btn, {
+      rv$manual_roster <- NULL
+      rv$show_roster_builder <- TRUE
     })
 
     # Search OpenAlex for authors
@@ -571,20 +587,32 @@ mod_resolution_server <- function(id, roster_rv) {
       shiny::showNotification("Roster cleared", type = "message")
     })
 
-    # Done building roster - transfer to main roster
+    # Done building roster - transfer to main roster (or merge with existing)
     shiny::observeEvent(input$roster_done_btn, {
       if (is.null(rv$manual_roster) || nrow(rv$manual_roster) == 0) {
         shiny::showNotification("Please add at least one faculty member", type = "warning")
         return()
       }
 
-      roster_rv$roster <- rv$manual_roster
-      roster_rv$ready <- TRUE
+      if (is.null(roster_rv$roster)) {
+        # First time building
+        roster_rv$roster <- rv$manual_roster
+        n_added <- nrow(rv$manual_roster)
+        msg <- sprintf("Roster created with %d faculty member(s)", n_added)
+      } else {
+        # Adding more - adjust IDs to not overlap
+        new_members <- rv$manual_roster
+        new_members$id <- new_members$id + max(roster_rv$roster$id, na.rm = TRUE)
+        roster_rv$roster <- dplyr::bind_rows(roster_rv$roster, new_members)
+        n_added <- nrow(new_members)
+        msg <- sprintf("Added %d faculty member(s). Total: %d", n_added, nrow(roster_rv$roster))
+      }
 
-      shiny::showNotification(
-        sprintf("Roster created with %d faculty member(s)", nrow(rv$manual_roster)),
-        type = "message"
-      )
+      roster_rv$ready <- TRUE
+      rv$show_roster_builder <- FALSE
+      rv$manual_roster <- NULL
+
+      shiny::showNotification(msg, type = "message")
     })
 
     # Import from CSV
@@ -683,36 +711,49 @@ mod_resolution_server <- function(id, roster_rv) {
     shiny::observe({
       req(roster_rv$roster)
 
-      # Create resolution tracking data frame
       roster <- roster_rv$roster
-      rv$resolution_df <- data.frame(
-        id = roster$id,
-        name = roster$name,
-        email = roster$email,
-        scopus_id = roster$scopus_id,
-        scholar_id = roster$scholar_id,
-        openalex_id = roster$openalex_id,
-        resolution_status = roster$resolution_status,
-        resolution_method = roster$resolution_method,
-        openalex_name = NA_character_,
-        openalex_works = NA_integer_,
-        openalex_citations = NA_integer_,
-        stringsAsFactors = FALSE
-      )
 
-      # Load any saved mappings
-      saved_mappings <- load_identity_mappings()
-      if (!is.null(saved_mappings)) {
-        # Merge saved mappings
-        for (i in seq_len(nrow(rv$resolution_df))) {
-          saved_row <- saved_mappings[saved_mappings$name == rv$resolution_df$name[i], ]
-          if (nrow(saved_row) > 0) {
-            if (!is.na(saved_row$openalex_id[1]) && saved_row$openalex_id[1] != "") {
-              rv$resolution_df$openalex_id[i] <- saved_row$openalex_id[1]
-              rv$resolution_df$resolution_status[i] <- "resolved"
-              rv$resolution_df$resolution_method[i] <- "saved"
+      make_resolution_rows <- function(rows) {
+        data.frame(
+          id = rows$id,
+          name = rows$name,
+          email = rows$email,
+          scopus_id = rows$scopus_id,
+          scholar_id = rows$scholar_id,
+          openalex_id = rows$openalex_id,
+          resolution_status = rows$resolution_status,
+          resolution_method = rows$resolution_method,
+          openalex_name = NA_character_,
+          openalex_works = NA_integer_,
+          openalex_citations = NA_integer_,
+          stringsAsFactors = FALSE
+        )
+      }
+
+      if (is.null(rv$resolution_df)) {
+        # First initialization
+        rv$resolution_df <- make_resolution_rows(roster)
+
+        # Load any saved mappings
+        saved_mappings <- load_identity_mappings()
+        if (!is.null(saved_mappings)) {
+          for (i in seq_len(nrow(rv$resolution_df))) {
+            saved_row <- saved_mappings[saved_mappings$name == rv$resolution_df$name[i], ]
+            if (nrow(saved_row) > 0) {
+              if (!is.na(saved_row$openalex_id[1]) && saved_row$openalex_id[1] != "") {
+                rv$resolution_df$openalex_id[i] <- saved_row$openalex_id[1]
+                rv$resolution_df$resolution_status[i] <- "resolved"
+                rv$resolution_df$resolution_method[i] <- "saved"
+              }
             }
           }
+        }
+      } else {
+        # Roster was extended - add rows for new members only
+        existing_ids <- rv$resolution_df$id
+        new_rows <- roster[!roster$id %in% existing_ids, ]
+        if (nrow(new_rows) > 0) {
+          rv$resolution_df <- dplyr::bind_rows(rv$resolution_df, make_resolution_rows(new_rows))
         }
       }
     })
@@ -880,6 +921,15 @@ mod_resolution_server <- function(id, roster_rv) {
 
       row <- rv$resolution_df[rv$selected_row, ]
 
+      # Get current rank from roster
+      current_rank <- ""
+      if (!is.null(roster_rv$roster)) {
+        roster_row <- roster_rv$roster[roster_rv$roster$id == row$id, ]
+        if (nrow(roster_row) > 0 && !is.na(roster_row$academic_rank[1]) && roster_row$academic_rank[1] != "") {
+          current_rank <- roster_row$academic_rank[1]
+        }
+      }
+
       shiny::tagList(
         shiny::h5(sprintf("Resolving: %s", row$name)),
 
@@ -891,6 +941,37 @@ mod_resolution_server <- function(id, roster_rv) {
           } else {
             NULL
           }
+        ),
+
+        shiny::hr(),
+
+        # Academic rank
+        shiny::h5("Academic Rank"),
+        shiny::fluidRow(
+          shiny::column(
+            width = 8,
+            shiny::selectInput(
+              ns("manual_res_rank"),
+              "Current Academic Rank",
+              choices = c(
+                "" = "",
+                "Instructor" = "Instructor",
+                "Assistant Professor" = "Assistant Professor",
+                "Associate Professor" = "Associate Professor",
+                "Professor" = "Professor"
+              ),
+              selected = current_rank
+            )
+          ),
+          shiny::column(
+            width = 4,
+            shiny::br(),
+            shiny::actionButton(ns("update_rank_btn"), "Save Rank", class = "btn-default btn-sm")
+          )
+        ),
+        shiny::helpText(
+          shiny::icon("info-circle"),
+          " Future enhancement: tag promotion dates to enable trajectory-based predictions."
         ),
 
         shiny::hr(),
@@ -1111,6 +1192,28 @@ mod_resolution_server <- function(id, roster_rv) {
       rv$resolution_df$resolution_method[idx] <- NA_character_
 
       shiny::showNotification("Resolution cleared", type = "message")
+    })
+
+    # Update academic rank for selected faculty member
+    shiny::observeEvent(input$update_rank_btn, {
+      req(rv$selected_row, rv$resolution_df, roster_rv$roster)
+
+      row_id <- rv$resolution_df$id[rv$selected_row]
+      rank_val <- input$manual_res_rank
+
+      roster_idx <- which(roster_rv$roster$id == row_id)
+      if (length(roster_idx) == 0) {
+        shiny::showNotification("Could not find faculty member in roster", type = "error")
+        return()
+      }
+
+      roster_rv$roster$academic_rank[roster_idx] <- if (!is.null(rank_val) && rank_val != "") rank_val else NA_character_
+
+      if (!is.null(rank_val) && rank_val != "") {
+        shiny::showNotification(sprintf("Rank updated to: %s", rank_val), type = "message")
+      } else {
+        shiny::showNotification("Rank cleared", type = "message")
+      }
     })
 
     # Save mappings

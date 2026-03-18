@@ -356,6 +356,7 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
         ggplot2::geom_line(ggplot2::aes(y = cumulative / max(cumulative, na.rm = TRUE) * max(works, na.rm = TRUE)),
                            color = "darkblue", size = 1, linetype = "dashed") +
         ggplot2::labs(x = "Year", y = "Works per Year") +
+        ggplot2::scale_x_continuous(breaks = function(x) seq(floor(min(x)), ceiling(max(x)), by = 1)) +
         ggplot2::theme_minimal()
 
       plotly::ggplotly(p)
@@ -375,6 +376,7 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
       p <- ggplot2::ggplot(yearly, ggplot2::aes(x = year, y = citations)) +
         ggplot2::geom_col(fill = "forestgreen", alpha = 0.7) +
         ggplot2::labs(x = "Year", y = "Citations") +
+        ggplot2::scale_x_continuous(breaks = function(x) seq(floor(min(x)), ceiling(max(x)), by = 1)) +
         ggplot2::theme_minimal()
 
       plotly::ggplotly(p)

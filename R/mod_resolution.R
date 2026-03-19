@@ -953,12 +953,21 @@ mod_resolution_server <- function(id, roster_rv) {
             shiny::selectInput(
               ns("manual_res_rank"),
               "Current Academic Rank",
-              choices = c(
-                "" = "",
-                "Instructor" = "Instructor",
-                "Assistant Professor" = "Assistant Professor",
-                "Associate Professor" = "Associate Professor",
-                "Professor" = "Professor"
+              choices = stats::setNames(
+                c(
+                  "",
+                  "Instructor",
+                  "Assistant Professor",
+                  "Associate Professor",
+                  "Professor"
+                ),
+                c(
+                  "",
+                  "Instructor",
+                  "Assistant Professor",
+                  "Associate Professor",
+                  "Professor"
+                )
               ),
               selected = current_rank
             )

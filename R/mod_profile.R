@@ -331,6 +331,21 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
               shiny::uiOutput(ns("topics_display"))
             )
           )
+        ),
+
+        # Grant Funding (NIH + NSF)
+        shiny::fluidRow(
+          shiny::column(
+            width = 12,
+            shiny::wellPanel(
+              shiny::h4(shiny::icon("dollar-sign"), " Grant Funding (NIH & NSF)"),
+              shiny::helpText(
+                "Grants fetched from NIH Reporter and NSF Awards by PI name. ",
+                "Search by name may include false positives."
+              ),
+              DT::dataTableOutput(ns("table_profile_grants"))
+            )
+          )
         )
       )
     })
@@ -472,6 +487,53 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
           )
         })
       )
+    })
+
+    # Grant table for individual profile
+    output$table_profile_grants <- DT::renderDataTable({
+      pd <- selected_person()
+
+      if (is.null(pd)) {
+        return(DT::datatable(
+          data.frame(Message = "Select a faculty member to see grant data."),
+          options = list(dom = "t"), rownames = FALSE
+        ))
+      }
+
+      # Combine NIH and NSF grants
+      grants_list <- list()
+      if (!is.null(pd$nih_grants) && nrow(pd$nih_grants) > 0) {
+        grants_list[[1]] <- pd$nih_grants
+      }
+      if (!is.null(pd$nsf_grants) && nrow(pd$nsf_grants) > 0) {
+        grants_list[[2]] <- pd$nsf_grants
+      }
+
+      if (length(grants_list) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No grant data found. Grants are searched by PI name from NIH Reporter and NSF Awards."),
+          options = list(dom = "t"), rownames = FALSE
+        ))
+      }
+
+      all_grants <- dplyr::bind_rows(grants_list)
+      all_grants <- all_grants[order(all_grants$is_active, decreasing = TRUE), ]
+
+      display_cols <- intersect(
+        c("grant_id", "title", "agency", "fiscal_year", "start_date", "end_date",
+          "funding_amount", "is_active", "mechanism"),
+        names(all_grants)
+      )
+
+      DT::datatable(
+        all_grants[, display_cols, drop = FALSE],
+        options = list(pageLength = 10, scrollX = TRUE),
+        rownames = FALSE
+      ) %>%
+        DT::formatCurrency(
+          columns = if ("funding_amount" %in% display_cols) "funding_amount" else character(),
+          currency = "$", digits = 0
+        )
     })
 
     # Export profile report

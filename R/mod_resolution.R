@@ -70,7 +70,7 @@ mod_resolution_ui <- function(id) {
           shiny::wellPanel(
             shiny::h4("Auto-Resolution"),
             shiny::p(
-              "Automatically resolve records with Scopus IDs to OpenAlex identities."
+              "Automatically resolve records with Scopus or ORCID IDs to OpenAlex identities."
             ),
             shiny::actionButton(
               ns("auto_resolve_btn"),
@@ -79,6 +79,16 @@ mod_resolution_ui <- function(id) {
             ),
             shiny::span(
               shiny::textOutput(ns("auto_resolve_status")),
+              style = "margin-left: 20px;"
+            ),
+            shiny::br(), shiny::br(),
+            shiny::actionButton(
+              ns("auto_resolve_orcid_btn"),
+              "Auto-Resolve via ORCID iDs",
+              class = "btn-info"
+            ),
+            shiny::span(
+              shiny::textOutput(ns("auto_resolve_orcid_status")),
               style = "margin-left: 20px;"
             )
           )
@@ -905,6 +915,95 @@ mod_resolution_server <- function(id, roster_rv) {
                         rv$resolution_df$scopus_id != "" &
                         rv$resolution_df$resolution_status == "pending")
       sprintf("%d records with Scopus IDs pending", n_scopus)
+    })
+
+    # Auto-resolve using ORCID iDs
+    shiny::observeEvent(input$auto_resolve_orcid_btn, {
+      req(rv$resolution_df)
+
+      # Find rows with ORCID ID but no OpenAlex ID
+      has_orcid <- "orcid_id" %in% names(rv$resolution_df)
+      if (!has_orcid) {
+        shiny::showNotification(
+          "No ORCID ID column found in roster. Add an 'orcid_id' column to enable ORCID-based resolution.",
+          type = "warning"
+        )
+        return()
+      }
+
+      to_resolve <- which(
+        !is.na(rv$resolution_df$orcid_id) &
+          rv$resolution_df$orcid_id != "" &
+          (is.na(rv$resolution_df$openalex_id) | rv$resolution_df$openalex_id == "") &
+          rv$resolution_df$resolution_status == "pending"
+      )
+
+      if (length(to_resolve) == 0) {
+        shiny::showNotification(
+          "No records with ORCID iDs pending resolution",
+          type = "message"
+        )
+        return()
+      }
+
+      shiny::withProgress(message = "Resolving via ORCID iDs...", {
+        resolved_count <- 0
+        failed_count <- 0
+
+        for (i in seq_along(to_resolve)) {
+          idx <- to_resolve[i]
+          shiny::incProgress(1 / length(to_resolve))
+
+          tryCatch({
+            result <- get_openalex_by_orcid(rv$resolution_df$orcid_id[idx])
+
+            if (!is.null(result)) {
+              # Normalize OpenAlex ID to consistent format
+              openalex_id <- result$openalex_id
+              if (!is.null(openalex_id) && !is.na(openalex_id) && openalex_id != "") {
+                if (grepl("^https://", openalex_id, ignore.case = TRUE)) {
+                  openalex_id <- sub("^https://openalex.org/", "", openalex_id, ignore.case = TRUE)
+                }
+                openalex_id <- paste0("A", sub("^[Aa]", "", openalex_id))
+                openalex_id <- paste0("https://openalex.org/", openalex_id)
+              }
+              rv$resolution_df$openalex_id[idx] <- openalex_id
+              rv$resolution_df$openalex_name[idx] <- result$display_name
+              rv$resolution_df$openalex_works[idx] <- result$works_count
+              rv$resolution_df$openalex_citations[idx] <- result$cited_by_count
+              rv$resolution_df$resolution_status[idx] <- "resolved"
+              rv$resolution_df$resolution_method[idx] <- "orcid_auto"
+              resolved_count <- resolved_count + 1
+            } else {
+              rv$resolution_df$resolution_status[idx] <- "failed"
+              rv$resolution_df$resolution_method[idx] <- "orcid_not_found"
+              failed_count <- failed_count + 1
+            }
+
+            Sys.sleep(1 / 24)  # ORCID rate limit: 24 req/sec
+
+          }, error = function(e) {
+            rv$resolution_df$resolution_status[idx] <- "failed"
+            failed_count <- failed_count + 1
+          })
+        }
+      })
+
+      shiny::showNotification(
+        sprintf("ORCID Resolution — Resolved: %d, Failed: %d", resolved_count, failed_count),
+        type = "message"
+      )
+    })
+
+    output$auto_resolve_orcid_status <- shiny::renderText({
+      req(rv$resolution_df)
+      if (!"orcid_id" %in% names(rv$resolution_df)) {
+        return("No ORCID ID column in roster")
+      }
+      n_orcid <- sum(!is.na(rv$resolution_df$orcid_id) &
+                       rv$resolution_df$orcid_id != "" &
+                       rv$resolution_df$resolution_status == "pending")
+      sprintf("%d records with ORCID iDs pending", n_orcid)
     })
 
     # Track selected row

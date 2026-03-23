@@ -152,6 +152,58 @@ mod_dashboard_ui <- function(id) {
       )
     ),
 
+    shiny::hr(),
+
+    # Grant Funding Section
+    shiny::fluidRow(
+      shiny::column(
+        width = 12,
+        shiny::wellPanel(
+          shiny::h4(shiny::icon("dollar-sign"), " Grant Funding (NIH & NSF)"),
+          shiny::helpText(
+            "Grant data is fetched from NIH Reporter and NSF Award Search by PI name. ",
+            "Results may include false positives or miss grants with name variations."
+          )
+        )
+      )
+    ),
+
+    shiny::fluidRow(
+      shinydashboard::valueBoxOutput(ns("kpi_total_grants"), width = 3),
+      shinydashboard::valueBoxOutput(ns("kpi_total_grant_funding"), width = 3),
+      shinydashboard::valueBoxOutput(ns("kpi_active_grants"), width = 3),
+      shinydashboard::valueBoxOutput(ns("kpi_pct_funded"), width = 3)
+    ),
+
+    shiny::fluidRow(
+      shiny::column(
+        width = 6,
+        shiny::wellPanel(
+          shiny::h4("Grant Count by Faculty"),
+          plotly::plotlyOutput(ns("plot_grant_count"), height = "350px")
+        )
+      ),
+      shiny::column(
+        width = 6,
+        shiny::wellPanel(
+          shiny::h4("Total Grant Funding by Faculty"),
+          plotly::plotlyOutput(ns("plot_grant_funding"), height = "350px")
+        )
+      )
+    ),
+
+    shiny::fluidRow(
+      shiny::column(
+        width = 12,
+        shiny::wellPanel(
+          shiny::h4("Grant Details"),
+          DT::dataTableOutput(ns("table_grants"))
+        )
+      )
+    ),
+
+    shiny::hr(),
+
     # Metric definitions
     shiny::fluidRow(
       shiny::column(
@@ -630,6 +682,172 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
         rownames = FALSE
       ) %>%
         sparkline::spk_add_deps()
+    })
+
+    # Grant funding KPIs
+    output$kpi_total_grants <- shinydashboard::renderValueBox({
+      m <- filtered_metrics()
+      val <- if (nrow(m) > 0 && "total_grant_count" %in% names(m)) {
+        sum(m$total_grant_count, na.rm = TRUE)
+      } else { 0 }
+      shinydashboard::valueBox(
+        format(val, big.mark = ","),
+        "Total Grants (NIH+NSF)",
+        icon = shiny::icon("award"),
+        color = "navy"
+      )
+    })
+
+    output$kpi_total_grant_funding <- shinydashboard::renderValueBox({
+      m <- filtered_metrics()
+      val <- if (nrow(m) > 0 && "total_grant_funding" %in% names(m)) {
+        total <- sum(m$total_grant_funding, na.rm = TRUE)
+        if (total >= 1e6) paste0("$", round(total / 1e6, 1), "M")
+        else if (total >= 1e3) paste0("$", round(total / 1e3, 0), "K")
+        else paste0("$", format(total, big.mark = ","))
+      } else { "$0" }
+      shinydashboard::valueBox(
+        val,
+        "Total Grant Funding",
+        icon = shiny::icon("dollar-sign"),
+        color = "green"
+      )
+    })
+
+    output$kpi_active_grants <- shinydashboard::renderValueBox({
+      m <- filtered_metrics()
+      nih_active <- if ("nih_active_grants" %in% names(m)) sum(m$nih_active_grants, na.rm = TRUE) else 0
+      nsf_active <- if ("nsf_active_grants" %in% names(m)) sum(m$nsf_active_grants, na.rm = TRUE) else 0
+      shinydashboard::valueBox(
+        nih_active + nsf_active,
+        "Active Grants",
+        icon = shiny::icon("check-circle"),
+        color = "teal"
+      )
+    })
+
+    output$kpi_pct_funded <- shinydashboard::renderValueBox({
+      m <- filtered_metrics()
+      if (nrow(m) > 0 && "total_grant_count" %in% names(m)) {
+        n_funded <- sum(!is.na(m$total_grant_count) & m$total_grant_count > 0, na.rm = TRUE)
+        pct <- round(100 * n_funded / nrow(m), 0)
+      } else { pct <- 0 }
+      shinydashboard::valueBox(
+        paste0(pct, "%"),
+        "% Faculty with Grants",
+        icon = shiny::icon("users"),
+        color = "orange"
+      )
+    })
+
+    # Grant count by faculty plot
+    output$plot_grant_count <- plotly::renderPlotly({
+      m <- filtered_metrics()
+      if (nrow(m) == 0 || !"total_grant_count" %in% names(m)) {
+        return(plotly::plot_ly() %>%
+                 plotly::layout(title = "No grant data available"))
+      }
+
+      grant_data <- m[!is.na(m$total_grant_count) & m$total_grant_count > 0, ]
+      if (nrow(grant_data) == 0) {
+        return(plotly::plot_ly() %>%
+                 plotly::layout(title = "No grants found for current selection"))
+      }
+
+      grant_data <- grant_data[order(grant_data$total_grant_count, decreasing = TRUE), ]
+
+      plotly::plot_ly(
+        data = grant_data,
+        x = ~total_grant_count,
+        y = ~reorder(name, total_grant_count),
+        type = "bar",
+        orientation = "h",
+        marker = list(color = "#1f77b4"),
+        text = ~paste0(total_grant_count, " grants"),
+        hoverinfo = "text"
+      ) %>%
+        plotly::layout(
+          xaxis = list(title = "Total Grants"),
+          yaxis = list(title = ""),
+          margin = list(l = 150)
+        )
+    })
+
+    # Grant funding by faculty plot
+    output$plot_grant_funding <- plotly::renderPlotly({
+      m <- filtered_metrics()
+      if (nrow(m) == 0 || !"total_grant_funding" %in% names(m)) {
+        return(plotly::plot_ly() %>%
+                 plotly::layout(title = "No grant funding data available"))
+      }
+
+      grant_data <- m[!is.na(m$total_grant_funding) & m$total_grant_funding > 0, ]
+      if (nrow(grant_data) == 0) {
+        return(plotly::plot_ly() %>%
+                 plotly::layout(title = "No grant funding found for current selection"))
+      }
+
+      grant_data <- grant_data[order(grant_data$total_grant_funding, decreasing = TRUE), ]
+      grant_data$funding_label <- ifelse(
+        grant_data$total_grant_funding >= 1e6,
+        paste0("$", round(grant_data$total_grant_funding / 1e6, 1), "M"),
+        paste0("$", round(grant_data$total_grant_funding / 1e3, 0), "K")
+      )
+
+      plotly::plot_ly(
+        data = grant_data,
+        x = ~total_grant_funding,
+        y = ~reorder(name, total_grant_funding),
+        type = "bar",
+        orientation = "h",
+        marker = list(color = "#2ca02c"),
+        text = ~funding_label,
+        hoverinfo = "text"
+      ) %>%
+        plotly::layout(
+          xaxis = list(title = "Total Funding ($)", tickformat = "$,.0f"),
+          yaxis = list(title = ""),
+          margin = list(l = 150)
+        )
+    })
+
+    # Grant details table
+    output$table_grants <- DT::renderDataTable({
+      req(resolution_rv$person_data)
+
+      all_grants <- collect_all_grants(resolution_rv$person_data)
+
+      m <- filtered_metrics()
+      if (nrow(all_grants) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No grant data available. Grants are fetched automatically by PI name."),
+          options = list(dom = "t"), rownames = FALSE
+        ))
+      }
+
+      # Filter to only show grants for people in current filtered set
+      if ("roster_id" %in% names(all_grants) && nrow(m) > 0) {
+        all_grants <- all_grants[all_grants$roster_id %in% m$roster_id, ]
+      }
+
+      display_cols <- intersect(
+        c("author_name", "grant_id", "title", "agency", "fiscal_year",
+          "start_date", "end_date", "funding_amount", "is_active", "source"),
+        names(all_grants)
+      )
+
+      DT::datatable(
+        all_grants[, display_cols, drop = FALSE],
+        options = list(pageLength = 15, scrollX = TRUE),
+        rownames = FALSE,
+        colnames = c("Faculty", "Grant ID", "Title", "Agency", "FY/Year",
+                     "Start", "End", "Amount ($)", "Active", "Source")[
+                       seq_along(display_cols)]
+      ) %>%
+        DT::formatCurrency(
+          columns = if ("funding_amount" %in% display_cols) "funding_amount" else character(),
+          currency = "$", digits = 0
+        )
     })
 
     # Metric definitions

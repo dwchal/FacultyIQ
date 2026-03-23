@@ -17,6 +17,8 @@ ROSTER_COLUMNS <- list(
   reaims_pubs = "reaims_pubs",
   scopus_id = "scopus_id",
   scholar_id = "scholar_id",
+  orcid_id = "orcid_id",
+  semantic_scholar_id = "semantic_scholar_id",
   associations = "associations"
 )
 
@@ -91,6 +93,23 @@ COLUMN_MAPPINGS <- list(
   "What is your Google Scholar username? (highlighted in screenshot below, this includes the letters and numbers between V-J in the search bar)" = "scholar_id",
   "google scholar username" = "scholar_id",
   "scholar username" = "scholar_id",
+
+  # ORCID ID variations
+  "orcid_id" = "orcid_id",
+  "orcid id" = "orcid_id",
+  "ORCID" = "orcid_id",
+  "ORCID ID" = "orcid_id",
+  "orcid" = "orcid_id",
+  "What is your ORCID iD?" = "orcid_id",
+  "orcid identifier" = "orcid_id",
+
+  # Semantic Scholar ID variations
+  "semantic_scholar_id" = "semantic_scholar_id",
+  "semantic scholar id" = "semantic_scholar_id",
+  "Semantic Scholar ID" = "semantic_scholar_id",
+  "S2 ID" = "semantic_scholar_id",
+  "s2 id" = "semantic_scholar_id",
+  "semanticscholar id" = "semantic_scholar_id",
 
   # Associations variations
   "associations" = "associations",
@@ -205,7 +224,7 @@ validate_roster <- function(data) {
   completeness$pct_complete <- round(100 * completeness$n_present / completeness$n_total, 1)
 
   # Info about what was found
-  id_cols <- c("scopus_id", "scholar_id")
+  id_cols <- c("scopus_id", "scholar_id", "orcid_id", "semantic_scholar_id")
   found_ids <- intersect(id_cols, names(data))
   if (length(found_ids) > 0) {
     for (id_col in found_ids) {
@@ -248,6 +267,20 @@ validate_roster <- function(data) {
     }
   }
 
+  # Validate ORCID ID format (xxxx-xxxx-xxxx-xxxx, last digit may be X)
+  if ("orcid_id" %in% names(data)) {
+    orcid_ids <- data$orcid_id[!is.na(data$orcid_id) & data$orcid_id != ""]
+    if (length(orcid_ids) > 0) {
+      # Strip ORCID URL prefix if present
+      orcid_ids <- gsub("^https?://orcid\\.org/", "", as.character(orcid_ids))
+      invalid_orcid <- !grepl("^\\d{4}-\\d{4}-\\d{4}-\\d{3}[\\dX]$", orcid_ids)
+      if (any(invalid_orcid)) {
+        warnings <- c(warnings, sprintf("%d ORCID ID(s) have invalid format (expected xxxx-xxxx-xxxx-xxxx)",
+                                        sum(invalid_orcid)))
+      }
+    }
+  }
+
   list(
     valid = length(errors) == 0,
     errors = errors,
@@ -283,7 +316,8 @@ clean_roster <- function(data) {
   }
 
   # Clean string columns
-  string_cols <- c("name", "email", "scopus_id", "scholar_id", "academic_rank", "associations")
+  string_cols <- c("name", "email", "scopus_id", "scholar_id", "orcid_id",
+                   "semantic_scholar_id", "academic_rank", "associations")
   for (col in string_cols) {
     if (col %in% names(data)) {
       data[[col]] <- trimws(as.character(data[[col]]))
@@ -465,7 +499,7 @@ calculate_completeness_summary <- function(data) {
 
   # Key columns for analysis
   key_cols <- c("name", "email", "academic_rank", "scopus_id", "scholar_id",
-                "reaims_pubs", "last_promotion")
+                "orcid_id", "semantic_scholar_id", "reaims_pubs", "last_promotion")
   key_cols <- intersect(key_cols, names(data))
 
   summary_df <- data.frame(
@@ -487,6 +521,8 @@ calculate_completeness_summary <- function(data) {
     academic_rank = "Academic Rank",
     scopus_id = "Scopus ID",
     scholar_id = "Google Scholar ID",
+    orcid_id = "ORCID iD",
+    semantic_scholar_id = "Semantic Scholar ID",
     reaims_pubs = "REAIMS Publications",
     last_promotion = "Last Promotion Date"
   )

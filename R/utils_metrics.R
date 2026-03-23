@@ -85,6 +85,69 @@ METRIC_DEFINITIONS <- list(
     description = "Self-reported peer-reviewed publication count from internal REAIMS system",
     source = "Self-reported",
     caveat = "Self-reported data; may differ from indexed counts"
+  ),
+  nih_grant_count = list(
+    name = "NIH Grant Count",
+    short_name = "NIH Grants",
+    description = "Total number of distinct NIH grants as principal investigator",
+    source = "NIH Reporter",
+    caveat = "Searched by name; may include false positives or miss grants with name variations"
+  ),
+  nih_total_funding = list(
+    name = "NIH Total Funding",
+    short_name = "NIH $",
+    description = "Total direct cost funding received from NIH grants as PI",
+    source = "NIH Reporter",
+    caveat = "Reflects reported award amounts; may not reflect actual spending"
+  ),
+  nih_active_grants = list(
+    name = "NIH Active Grants",
+    short_name = "NIH Active",
+    description = "Number of currently active NIH grants",
+    source = "NIH Reporter",
+    caveat = "Based on fiscal year; may lag actual grant period"
+  ),
+  nsf_grant_count = list(
+    name = "NSF Grant Count",
+    short_name = "NSF Grants",
+    description = "Total number of distinct NSF awards as principal investigator",
+    source = "NSF Awards",
+    caveat = "Searched by name; may include false positives or miss awards with name variations"
+  ),
+  nsf_total_funding = list(
+    name = "NSF Total Funding",
+    short_name = "NSF $",
+    description = "Total funding received from NSF awards as PI",
+    source = "NSF Awards",
+    caveat = "Reflects obligated amounts at time of data fetch"
+  ),
+  total_grant_count = list(
+    name = "Total Grant Count",
+    short_name = "Grants",
+    description = "Total NIH + NSF grants as principal investigator",
+    source = "NIH Reporter + NSF Awards",
+    caveat = "Combined from NIH Reporter and NSF Awards searches by name"
+  ),
+  total_grant_funding = list(
+    name = "Total Grant Funding",
+    short_name = "Grant $",
+    description = "Total grant funding from NIH and NSF combined",
+    source = "NIH Reporter + NSF Awards",
+    caveat = "Sum of NIH and NSF reported award amounts"
+  ),
+  influential_citation_count = list(
+    name = "Influential Citations",
+    short_name = "Infl. Cites",
+    description = "Citations that substantially influenced subsequent work (Semantic Scholar metric)",
+    source = "Semantic Scholar",
+    caveat = "Requires Semantic Scholar ID in roster; measures citation quality, not quantity"
+  ),
+  funded_works_pct = list(
+    name = "Funded Works %",
+    short_name = "Funded %",
+    description = "Percentage of works with external funding acknowledgments (via CrossRef)",
+    source = "CrossRef",
+    caveat = "Only covers works with DOIs enriched via CrossRef; may undercount"
   )
 )
 
@@ -120,6 +183,25 @@ compute_person_metrics <- function(person_data, roster_row = NULL) {
     # Comparison fields from roster
     reaims_pubs = NA_integer_,
     academic_rank = NA_character_,
+
+    # Grant funding metrics (NIH + NSF)
+    nih_grant_count = NA_integer_,
+    nih_total_funding = NA_real_,
+    nih_active_grants = NA_integer_,
+    nsf_grant_count = NA_integer_,
+    nsf_total_funding = NA_real_,
+    nsf_active_grants = NA_integer_,
+    total_grant_count = NA_integer_,
+    total_grant_funding = NA_real_,
+
+    # CrossRef enrichment metrics
+    funded_works_count = NA_integer_,
+    funded_works_pct = NA_real_,
+    avg_reference_count = NA_real_,
+
+    # Semantic Scholar metrics
+    influential_citation_count = NA_integer_,
+    influential_citation_pct = NA_real_,
 
     # Time series data
     yearly_works = NULL,
@@ -206,6 +288,70 @@ compute_person_metrics <- function(person_data, roster_row = NULL) {
     metrics$oa_percentage <- round(100 * n_oa / nrow(works), 1)
   }
 
+  # NIH grant metrics
+  if (!is.null(person_data$nih_grants) && nrow(person_data$nih_grants) > 0) {
+    nih <- person_data$nih_grants
+    metrics$nih_grant_count <- nrow(nih)
+    metrics$nih_total_funding <- sum(nih$funding_amount, na.rm = TRUE)
+    metrics$nih_active_grants <- sum(nih$is_active == TRUE, na.rm = TRUE)
+  }
+
+  # NSF grant metrics
+  if (!is.null(person_data$nsf_grants) && nrow(person_data$nsf_grants) > 0) {
+    nsf <- person_data$nsf_grants
+    metrics$nsf_grant_count <- nrow(nsf)
+    metrics$nsf_total_funding <- sum(nsf$funding_amount, na.rm = TRUE)
+    metrics$nsf_active_grants <- sum(nsf$is_active == TRUE, na.rm = TRUE)
+  }
+
+  # Combined grant metrics
+  metrics$total_grant_count <- sum(
+    c(metrics$nih_grant_count, metrics$nsf_grant_count), na.rm = TRUE
+  )
+  if (is.na(metrics$nih_grant_count) && is.na(metrics$nsf_grant_count)) {
+    metrics$total_grant_count <- NA_integer_
+  }
+  metrics$total_grant_funding <- sum(
+    c(metrics$nih_total_funding, metrics$nsf_total_funding), na.rm = TRUE
+  )
+  if (is.na(metrics$nih_total_funding) && is.na(metrics$nsf_total_funding)) {
+    metrics$total_grant_funding <- NA_real_
+  }
+
+  # CrossRef enrichment metrics (from enriched works)
+  if (!is.null(person_data$works) && nrow(person_data$works) > 0 &&
+      "crossref_has_funding" %in% names(person_data$works)) {
+    works <- person_data$works
+    enriched <- works[!is.na(works$crossref_has_funding), ]
+    if (nrow(enriched) > 0) {
+      n_funded <- sum(enriched$crossref_has_funding == TRUE, na.rm = TRUE)
+      metrics$funded_works_count <- as.integer(n_funded)
+      metrics$funded_works_pct <- round(100 * n_funded / nrow(enriched), 1)
+    }
+    if ("crossref_reference_count" %in% names(works)) {
+      ref_counts <- works$crossref_reference_count[!is.na(works$crossref_reference_count)]
+      if (length(ref_counts) > 0) {
+        metrics$avg_reference_count <- round(mean(ref_counts), 1)
+      }
+    }
+  }
+
+  # Semantic Scholar metrics
+  if (!is.null(person_data$semantic_scholar)) {
+    s2 <- person_data$semantic_scholar
+    if (!is.null(s2$papers) && nrow(s2$papers) > 0) {
+      metrics$influential_citation_count <- as.integer(
+        sum(s2$papers$influential_citation_count, na.rm = TRUE)
+      )
+      total_cites_s2 <- sum(s2$papers$citation_count, na.rm = TRUE)
+      if (!is.na(metrics$influential_citation_count) && total_cites_s2 > 0) {
+        metrics$influential_citation_pct <- round(
+          100 * metrics$influential_citation_count / total_cites_s2, 1
+        )
+      }
+    }
+  }
+
   # Determine unavailable reasons
   if (is.na(metrics$works_count)) {
     if (length(person_data$data_sources) == 0) {
@@ -245,6 +391,19 @@ compute_all_metrics <- function(person_data_list, roster) {
       last_pub_year = integer(),
       career_years = integer(),
       reaims_pubs = integer(),
+      nih_grant_count = integer(),
+      nih_total_funding = numeric(),
+      nih_active_grants = integer(),
+      nsf_grant_count = integer(),
+      nsf_total_funding = numeric(),
+      nsf_active_grants = integer(),
+      total_grant_count = integer(),
+      total_grant_funding = numeric(),
+      funded_works_count = integer(),
+      funded_works_pct = numeric(),
+      avg_reference_count = numeric(),
+      influential_citation_count = integer(),
+      influential_citation_pct = numeric(),
       data_quality = character(),
       data_sources = character(),
       stringsAsFactors = FALSE
@@ -284,6 +443,19 @@ compute_all_metrics <- function(person_data_list, roster) {
       last_pub_year = scalar_or_na(m$last_pub_year, NA_integer_),
       career_years = scalar_or_na(m$career_years, NA_integer_),
       reaims_pubs = scalar_or_na(m$reaims_pubs, NA_integer_),
+      nih_grant_count = scalar_or_na(m$nih_grant_count, NA_integer_),
+      nih_total_funding = scalar_or_na(m$nih_total_funding, NA_real_),
+      nih_active_grants = scalar_or_na(m$nih_active_grants, NA_integer_),
+      nsf_grant_count = scalar_or_na(m$nsf_grant_count, NA_integer_),
+      nsf_total_funding = scalar_or_na(m$nsf_total_funding, NA_real_),
+      nsf_active_grants = scalar_or_na(m$nsf_active_grants, NA_integer_),
+      total_grant_count = scalar_or_na(m$total_grant_count, NA_integer_),
+      total_grant_funding = scalar_or_na(m$total_grant_funding, NA_real_),
+      funded_works_count = scalar_or_na(m$funded_works_count, NA_integer_),
+      funded_works_pct = scalar_or_na(m$funded_works_pct, NA_real_),
+      avg_reference_count = scalar_or_na(m$avg_reference_count, NA_real_),
+      influential_citation_count = scalar_or_na(m$influential_citation_count, NA_integer_),
+      influential_citation_pct = scalar_or_na(m$influential_citation_pct, NA_real_),
       data_quality = scalar_or_na(m$data_quality, NA_character_),
       data_sources = data_sources_str,
       stringsAsFactors = FALSE
@@ -674,4 +846,94 @@ prepare_export_long <- function(yearly_data) {
   yearly_data %>%
     dplyr::arrange(name, year) %>%
     dplyr::select(name, roster_id, year, value)
+}
+
+# =============================================================================
+# Grant Funding Metrics
+# =============================================================================
+
+#' Compute grant funding summary for all people
+#'
+#' @param person_data_list List of person data from fetch_all_person_data()
+#' @return Data frame with per-person grant metrics
+compute_grant_metrics <- function(person_data_list) {
+  results <- list()
+
+  for (i in seq_along(person_data_list)) {
+    pd <- person_data_list[[i]]
+
+    nih_count <- NA_integer_
+    nih_funding <- NA_real_
+    nih_active <- NA_integer_
+    nsf_count <- NA_integer_
+    nsf_funding <- NA_real_
+    nsf_active <- NA_integer_
+
+    if (!is.null(pd$nih_grants) && nrow(pd$nih_grants) > 0) {
+      nih_count <- nrow(pd$nih_grants)
+      nih_funding <- sum(pd$nih_grants$funding_amount, na.rm = TRUE)
+      nih_active <- sum(pd$nih_grants$is_active == TRUE, na.rm = TRUE)
+    }
+
+    if (!is.null(pd$nsf_grants) && nrow(pd$nsf_grants) > 0) {
+      nsf_count <- nrow(pd$nsf_grants)
+      nsf_funding <- sum(pd$nsf_grants$funding_amount, na.rm = TRUE)
+      nsf_active <- sum(pd$nsf_grants$is_active == TRUE, na.rm = TRUE)
+    }
+
+    total_count <- sum(c(nih_count, nsf_count), na.rm = TRUE)
+    if (is.na(nih_count) && is.na(nsf_count)) total_count <- NA_integer_
+
+    total_funding <- sum(c(nih_funding, nsf_funding), na.rm = TRUE)
+    if (is.na(nih_funding) && is.na(nsf_funding)) total_funding <- NA_real_
+
+    results[[i]] <- data.frame(
+      name = pd$name,
+      roster_id = pd$roster_id,
+      nih_grant_count = nih_count,
+      nih_total_funding = nih_funding,
+      nih_active_grants = nih_active,
+      nsf_grant_count = nsf_count,
+      nsf_total_funding = nsf_funding,
+      nsf_active_grants = nsf_active,
+      total_grant_count = total_count,
+      total_grant_funding = total_funding,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  dplyr::bind_rows(results)
+}
+
+#' Collect all grants across all people into a flat data frame
+#'
+#' @param person_data_list List of person data
+#' @return Data frame with all grants, with author name and roster_id attached
+collect_all_grants <- function(person_data_list) {
+  all_grants <- list()
+
+  for (i in seq_along(person_data_list)) {
+    pd <- person_data_list[[i]]
+
+    grants_i <- list()
+    if (!is.null(pd$nih_grants) && nrow(pd$nih_grants) > 0) {
+      grants_i[[1]] <- pd$nih_grants
+    }
+    if (!is.null(pd$nsf_grants) && nrow(pd$nsf_grants) > 0) {
+      grants_i[[2]] <- pd$nsf_grants
+    }
+
+    if (length(grants_i) > 0) {
+      combined_i <- dplyr::bind_rows(grants_i)
+      combined_i$author_name <- pd$name
+      combined_i$roster_id <- pd$roster_id
+      all_grants[[i]] <- combined_i
+    }
+  }
+
+  if (length(all_grants) == 0) {
+    return(data.frame())
+  }
+
+  dplyr::bind_rows(all_grants)
 }

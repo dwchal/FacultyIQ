@@ -34,6 +34,41 @@ default:
   bibliometrix:
     enabled: true
 
+  # ORCID settings (free, no API key required)
+  orcid:
+    enabled: true
+    base_url: "https://pub.orcid.org/v3.0"
+    rate_limit_per_second: 24
+
+  # NIH Reporter settings (free, no API key required)
+  nih_reporter:
+    enabled: true
+    base_url: "https://api.reporter.nih.gov/v2"
+    rate_limit_per_second: 7
+    default_from_year: 2000
+
+  # NSF Award Search settings (free, no API key required)
+  nsf_awards:
+    enabled: true
+    base_url: "https://www.research.gov/awardapi-service/v1/awards.json"
+    rate_limit_per_second: 5
+    default_from_year: 2000
+
+  # CrossRef settings (free, polite pool with email)
+  crossref:
+    enabled: true
+    base_url: "https://api.crossref.org"
+    mailto: !expr Sys.getenv("CROSSREF_EMAIL", "")
+    rate_limit_per_second: 50
+    enrich_top_works: 50
+
+  # Semantic Scholar settings (free, no API key required for basic use)
+  semantic_scholar:
+    enabled: true
+    base_url: "https://api.semanticscholar.org/graph/v1"
+    rate_limit_per_second: 1
+    cache_expiry_days: 14
+
   # Data settings
   data:
     # Maximum roster size (for performance)

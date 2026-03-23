@@ -10,5 +10,10 @@ OPENALEX_EMAIL=your.email@institution.edu
 # Get your key from https://dev.elsevier.com/
 SCOPUS_API_KEY=your_scopus_api_key_here
 
+# CrossRef polite pool email (optional, enables higher rate limits)
+# Using an email enables the CrossRef "polite pool" with generous rate limits
+CROSSREF_EMAIL=your.email@institution.edu
+
 # Note: Google Scholar does not require API keys (uses scraping)
 # but is rate-limited and may block excessive requests
+# Note: ORCID, NIH Reporter, NSF Awards, and Semantic Scholar require no API keys

@@ -311,11 +311,7 @@ mod_resolution_server <- function(id, roster_rv) {
                   "Instructor" = "Instructor",
                   "Assistant Professor" = "Assistant Professor",
                   "Associate Professor" = "Associate Professor",
-                  "Full Professor" = "Full Professor",
-                  "Research Faculty" = "Research Faculty",
-                  "Clinical Faculty" = "Clinical Faculty",
-                  "Adjunct" = "Adjunct",
-                  "Emeritus" = "Emeritus"
+                  "Professor" = "Professor"
                 )
               ),
               shiny::fluidRow(
@@ -443,6 +439,18 @@ mod_resolution_server <- function(id, roster_rv) {
         shiny::h5("Search Results"),
         DT::dataTableOutput(ns("build_search_table")),
         shiny::br(),
+        shiny::selectInput(
+          ns("search_rank"),
+          "Academic Rank",
+          choices = c(
+            "" = "",
+            "Instructor" = "Instructor",
+            "Assistant Professor" = "Assistant Professor",
+            "Associate Professor" = "Associate Professor",
+            "Professor" = "Professor"
+          ),
+          width = "100%"
+        ),
         shiny::actionButton(
           ns("build_add_selected_btn"),
           "Add Selected to Roster",
@@ -504,11 +512,14 @@ mod_resolution_server <- function(id, roster_rv) {
         next_id <- max(rv$manual_roster$id, na.rm = TRUE) + 1L
       }
 
+      rank_val <- input$search_rank
+      if (is.null(rank_val) || rank_val == "") rank_val <- NA_character_
+
       new_row <- data.frame(
         id = next_id,
         name = selected$display_name,
         email = NA_character_,
-        academic_rank = NA_character_,
+        academic_rank = rank_val,
         last_promotion = NA_character_,
         reaims_pubs = NA_integer_,
         scopus_id = NA_character_,

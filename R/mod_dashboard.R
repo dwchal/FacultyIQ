@@ -400,17 +400,42 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
                  plotly::layout(title = "No data available"))
       }
 
-      p <- ggplot2::ggplot(agg, ggplot2::aes(x = year)) +
-        ggplot2::geom_ribbon(ggplot2::aes(ymin = q25, ymax = q75),
-                             fill = "steelblue", alpha = 0.3) +
-        ggplot2::geom_line(ggplot2::aes(y = total), color = "steelblue", size = 1) +
-        ggplot2::geom_line(ggplot2::aes(y = median), color = "darkblue",
-                           linetype = "dashed", size = 0.8) +
-        ggplot2::labs(x = "Year", y = "Works Count",
-                      caption = "Solid: Total | Dashed: Median | Shaded: IQR") +
-        ggplot2::theme_minimal()
+      line_data_works <- tidyr::pivot_longer(
+        agg[, c("year", "total", "median")],
+        cols = c("total", "median"),
+        names_to = "metric",
+        values_to = "value"
+      ) %>%
+        dplyr::mutate(metric = dplyr::case_when(
+          metric == "total" ~ "Total",
+          metric == "median" ~ "Median per Person"
+        ))
 
-      plotly::ggplotly(p)
+      p <- ggplot2::ggplot(agg, ggplot2::aes(x = year)) +
+        ggplot2::geom_ribbon(ggplot2::aes(ymin = q25, ymax = q75, fill = "IQR (25th\u201375th pct)"),
+                             alpha = 0.3) +
+        ggplot2::geom_line(
+          data = line_data_works,
+          ggplot2::aes(y = value, color = metric, linetype = metric),
+          size = 1
+        ) +
+        ggplot2::scale_color_manual(
+          values = c("Total" = "steelblue", "Median per Person" = "darkblue")
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = c("Total" = "solid", "Median per Person" = "dashed")
+        ) +
+        ggplot2::scale_fill_manual(
+          values = c("IQR (25th\u201375th pct)" = "steelblue")
+        ) +
+        ggplot2::labs(x = "Year", y = "Works Count",
+                      color = NULL, linetype = NULL, fill = NULL) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(legend.position = "bottom")
+
+      plotly::ggplotly(p) %>%
+        plotly::layout(legend = list(orientation = "h", x = 0.5, xanchor = "center",
+                                     y = -0.2))
     })
 
     # Citations per year plot
@@ -442,17 +467,42 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
                  plotly::layout(title = "No data available"))
       }
 
-      p <- ggplot2::ggplot(agg, ggplot2::aes(x = year)) +
-        ggplot2::geom_ribbon(ggplot2::aes(ymin = q25, ymax = q75),
-                             fill = "forestgreen", alpha = 0.3) +
-        ggplot2::geom_line(ggplot2::aes(y = total), color = "forestgreen", size = 1) +
-        ggplot2::geom_line(ggplot2::aes(y = median), color = "darkgreen",
-                           linetype = "dashed", size = 0.8) +
-        ggplot2::labs(x = "Year", y = "Citations",
-                      caption = "Solid: Total | Dashed: Median | Shaded: IQR") +
-        ggplot2::theme_minimal()
+      line_data_cit <- tidyr::pivot_longer(
+        agg[, c("year", "total", "median")],
+        cols = c("total", "median"),
+        names_to = "metric",
+        values_to = "value"
+      ) %>%
+        dplyr::mutate(metric = dplyr::case_when(
+          metric == "total" ~ "Total",
+          metric == "median" ~ "Median per Person"
+        ))
 
-      plotly::ggplotly(p)
+      p <- ggplot2::ggplot(agg, ggplot2::aes(x = year)) +
+        ggplot2::geom_ribbon(ggplot2::aes(ymin = q25, ymax = q75, fill = "IQR (25th\u201375th pct)"),
+                             alpha = 0.3) +
+        ggplot2::geom_line(
+          data = line_data_cit,
+          ggplot2::aes(y = value, color = metric, linetype = metric),
+          size = 1
+        ) +
+        ggplot2::scale_color_manual(
+          values = c("Total" = "forestgreen", "Median per Person" = "darkgreen")
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = c("Total" = "solid", "Median per Person" = "dashed")
+        ) +
+        ggplot2::scale_fill_manual(
+          values = c("IQR (25th\u201375th pct)" = "forestgreen")
+        ) +
+        ggplot2::labs(x = "Year", y = "Citations",
+                      color = NULL, linetype = NULL, fill = NULL) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(legend.position = "bottom")
+
+      plotly::ggplotly(p) %>%
+        plotly::layout(legend = list(orientation = "h", x = 0.5, xanchor = "center",
+                                     y = -0.2))
     })
 
     # OA percentage over time

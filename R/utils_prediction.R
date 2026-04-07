@@ -24,11 +24,42 @@ NON_TENURE_RANKS <- c(
   "Adjunct"
 )
 
+#' Standardize academic rank strings to canonical form
+#'
+#' Maps common variations (e.g. "Professor" -> "Full Professor") to
+#' their canonical equivalents in RANK_ORDER.
+#'
+#' @param rank Character vector of academic rank strings
+#' @return Character vector with standardized rank names
+standardize_rank <- function(rank) {
+  mapping <- c(
+    "Professor" = "Full Professor",
+    "professor" = "Full Professor",
+    "PROFESSOR" = "Full Professor",
+    "Prof" = "Full Professor",
+    "Prof." = "Full Professor",
+    "Asst Professor" = "Assistant Professor",
+    "Asst Prof" = "Assistant Professor",
+    "Assoc Professor" = "Associate Professor",
+    "Assoc Prof" = "Associate Professor"
+  )
+
+  ifelse(
+    is.na(rank) | rank == "", rank,
+    ifelse(rank %in% names(mapping), mapping[rank], rank)
+  )
+}
+
 #' Get numeric rank level for comparison
 #'
-#' @param rank Academic rank string
+#' @param rank Academic rank string (scalar or vector)
 #' @return Numeric level (1-5 for tenure track, NA for others)
 get_rank_level <- function(rank) {
+  # Vectorized version
+  if (length(rank) > 1) {
+    return(vapply(rank, get_rank_level, FUN.VALUE = integer(1)))
+  }
+
   if (is.na(rank) || rank == "") return(NA_integer_)
 
   level <- match(rank, RANK_ORDER)
@@ -114,6 +145,10 @@ compute_rank_benchmarks <- function(metrics_df) {
   if (is.null(metrics_df) || nrow(metrics_df) == 0) {
     return(NULL)
   }
+
+  # Standardize rank names before filtering
+  metrics_df <- metrics_df %>%
+    dplyr::mutate(academic_rank = standardize_rank(academic_rank))
 
   # Filter to faculty with known ranks in the standard track
   ranked_df <- metrics_df %>%
@@ -406,6 +441,10 @@ predict_all_ranks <- function(metrics_df) {
     return(NULL)
   }
 
+  # Standardize rank names
+  metrics_df <- metrics_df %>%
+    dplyr::mutate(academic_rank = standardize_rank(academic_rank))
+
   # Compute benchmarks from the data
   benchmarks <- compute_rank_benchmarks(metrics_df)
 
@@ -496,6 +535,10 @@ identify_promotion_candidates <- function(metrics_df, benchmarks) {
       is.null(benchmarks) || nrow(benchmarks) == 0) {
     return(NULL)
   }
+
+  # Standardize rank names
+  metrics_df <- metrics_df %>%
+    dplyr::mutate(academic_rank = standardize_rank(academic_rank))
 
   candidates <- list()
 

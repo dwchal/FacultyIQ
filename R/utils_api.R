@@ -61,9 +61,9 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
     # Extract affiliations safely - handle missing column
     n_authors <- nrow(authors)
     if ("last_known_institution" %in% names(authors) &&
-        !is.null(authors$last_known_institution) &&
-        length(authors$last_known_institution) == n_authors) {
-      affiliations <- vapply(authors$last_known_institution, function(x) {
+        !is.null(authors[["last_known_institution"]]) &&
+        length(authors[["last_known_institution"]]) == n_authors) {
+      affiliations <- vapply(authors[["last_known_institution"]], function(x) {
         if (is.null(x) || length(x) == 0) return(NA_character_)
         if (is.data.frame(x)) return(as.character(x$display_name[1]))
         if (is.list(x)) return(as.character(x$display_name[1]))
@@ -76,9 +76,9 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
     # Extract h_index and i10_index from summary_stats
     h_indices <- vapply(seq_len(n_authors), function(i) {
       if ("summary_stats" %in% names(authors) &&
-          !is.null(authors$summary_stats) &&
-          length(authors$summary_stats) >= i) {
-        stats <- authors$summary_stats[[i]]
+          !is.null(authors[["summary_stats"]]) &&
+          length(authors[["summary_stats"]]) >= i) {
+        stats <- authors[["summary_stats"]][[i]]
         if (is.list(stats) && !is.null(stats$h_index)) {
           return(as.integer(stats$h_index))
         }
@@ -88,9 +88,9 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
 
     i10_indices <- vapply(seq_len(n_authors), function(i) {
       if ("summary_stats" %in% names(authors) &&
-          !is.null(authors$summary_stats) &&
-          length(authors$summary_stats) >= i) {
-        stats <- authors$summary_stats[[i]]
+          !is.null(authors[["summary_stats"]]) &&
+          length(authors[["summary_stats"]]) >= i) {
+        stats <- authors[["summary_stats"]][[i]]
         if (is.list(stats) && !is.null(stats$i10_index)) {
           return(as.integer(stats$i10_index))
         }
@@ -146,9 +146,9 @@ get_openalex_by_scopus <- function(scopus_id) {
     h_index <- NA_integer_
     i10_index <- NA_integer_
     if ("summary_stats" %in% names(authors) &&
-        !is.null(authors$summary_stats) &&
-        length(authors$summary_stats) >= 1) {
-      stats <- authors$summary_stats[[1]]
+        !is.null(authors[["summary_stats"]]) &&
+        length(authors[["summary_stats"]]) >= 1) {
+      stats <- authors[["summary_stats"]][[1]]
       if (is.list(stats)) {
         if (!is.null(stats$h_index)) h_index <- as.integer(stats$h_index)
         if (!is.null(stats$i10_index)) i10_index <- as.integer(stats$i10_index)
@@ -164,11 +164,15 @@ get_openalex_by_scopus <- function(scopus_id) {
       h_index = h_index,
       i10_index = i10_index,
       affiliation = {
-        inst <- authors$last_known_institution[[1]]
-        if (is.null(inst) || length(inst) == 0) NA_character_
-        else if (is.data.frame(inst)) inst$display_name[1]
-        else if (is.list(inst)) inst$display_name[1]
-        else NA_character_
+        if ("last_known_institution" %in% names(authors) && !is.null(authors[["last_known_institution"]])) {
+          inst <- authors[["last_known_institution"]][[1]]
+          if (is.null(inst) || length(inst) == 0) NA_character_
+          else if (is.data.frame(inst) && "display_name" %in% names(inst)) as.character(inst$display_name[1])
+          else if (is.list(inst) && !is.null(inst$display_name)) as.character(inst$display_name[1])
+          else NA_character_
+        } else {
+          NA_character_
+        }
       },
       stringsAsFactors = FALSE
     )
@@ -203,20 +207,44 @@ get_openalex_author <- function(openalex_id) {
     # Extract counts by year
     counts_by_year <- author$counts_by_year[[1]]
 
+    # Safely extract summary_stats
+    h_index <- NA_integer_
+    i10_index <- NA_integer_
+    if ("summary_stats" %in% names(author) && !is.null(author[["summary_stats"]])) {
+      stats <- author[["summary_stats"]]
+      if (is.data.frame(stats)) {
+        if ("h_index" %in% names(stats)) h_index <- as.integer(stats$h_index[1])
+        if ("i10_index" %in% names(stats)) i10_index <- as.integer(stats$i10_index[1])
+      } else if (is.list(stats)) {
+        s <- stats[[1]]
+        if (is.list(s)) {
+          if (!is.null(s$h_index)) h_index <- as.integer(s$h_index)
+          if (!is.null(s$i10_index)) i10_index <- as.integer(s$i10_index)
+        }
+      }
+    }
+
+    # Safely extract last_known_institution
+    institution <- NA_character_
+    if ("last_known_institution" %in% names(author) && !is.null(author[["last_known_institution"]])) {
+      inst <- author[["last_known_institution"]][[1]]
+      if (!is.null(inst) && length(inst) > 0) {
+        if (is.data.frame(inst) && "display_name" %in% names(inst)) {
+          institution <- as.character(inst$display_name[1])
+        } else if (is.list(inst) && !is.null(inst$display_name)) {
+          institution <- as.character(inst$display_name[1])
+        }
+      }
+    }
+
     list(
       openalex_id = author$id[1],
       display_name = author$display_name[1],
       works_count = author$works_count[1],
       cited_by_count = author$cited_by_count[1],
-      h_index = author$summary_stats$h_index[1],
-      i10_index = author$summary_stats$i10_index[1],
-      last_known_institution = {
-        inst <- author$last_known_institution[[1]]
-        if (is.null(inst)) NA_character_
-        else if (is.data.frame(inst)) inst$display_name[1]
-        else if (is.list(inst)) inst$display_name[1]
-        else NA_character_
-      },
+      h_index = h_index,
+      i10_index = i10_index,
+      last_known_institution = institution,
       counts_by_year = counts_by_year
     )
 
@@ -239,13 +267,21 @@ get_openalex_works <- function(openalex_id, from_year = NULL, to_year = NULL, li
   }
 
   tryCatch({
-    works <- openalexR::oa_fetch(
+    # Build arguments dynamically to avoid passing NULL date filters
+    # (openalexR errors with "Filters must have a value" when NULL dates are passed)
+    fetch_args <- list(
       entity = "works",
       author.id = openalex_id,
-      from_publication_date = if (!is.null(from_year)) paste0(from_year, "-01-01") else NULL,
-      to_publication_date = if (!is.null(to_year)) paste0(to_year, "-12-31") else NULL,
       options = list(per_page = min(limit, 200))
     )
+    if (!is.null(from_year) && !is.na(from_year) && from_year != "") {
+      fetch_args$from_publication_date <- paste0(from_year, "-01-01")
+    }
+    if (!is.null(to_year) && !is.na(to_year) && to_year != "") {
+      fetch_args$to_publication_date <- paste0(to_year, "-12-31")
+    }
+
+    works <- do.call(openalexR::oa_fetch, fetch_args)
 
     if (is.null(works) || nrow(works) == 0) {
       return(NULL)
@@ -554,12 +590,26 @@ get_openalex_by_orcid <- function(orcid_id) {
     h_index <- NA_integer_
     i10_index <- NA_integer_
     if ("summary_stats" %in% names(authors) &&
-        !is.null(authors$summary_stats) &&
-        length(authors$summary_stats) >= 1) {
-      stats <- authors$summary_stats[[1]]
+        !is.null(authors[["summary_stats"]]) &&
+        length(authors[["summary_stats"]]) >= 1) {
+      stats <- authors[["summary_stats"]][[1]]
       if (is.list(stats)) {
         if (!is.null(stats$h_index)) h_index <- as.integer(stats$h_index)
         if (!is.null(stats$i10_index)) i10_index <- as.integer(stats$i10_index)
+      }
+    }
+
+    # Safely extract affiliation
+    affiliation <- NA_character_
+    if ("last_known_institution" %in% names(authors) &&
+        !is.null(authors[["last_known_institution"]])) {
+      inst <- authors[["last_known_institution"]][[1]]
+      if (!is.null(inst) && length(inst) > 0) {
+        if (is.data.frame(inst) && "display_name" %in% names(inst)) {
+          affiliation <- as.character(inst$display_name[1])
+        } else if (is.list(inst) && !is.null(inst$display_name)) {
+          affiliation <- as.character(inst$display_name[1])
+        }
       }
     }
 
@@ -570,13 +620,7 @@ get_openalex_by_orcid <- function(orcid_id) {
       cited_by_count = authors$cited_by_count[1],
       h_index = h_index,
       i10_index = i10_index,
-      affiliation = {
-        inst <- authors$last_known_institution[[1]]
-        if (is.null(inst) || length(inst) == 0) NA_character_
-        else if (is.data.frame(inst)) inst$display_name[1]
-        else if (is.list(inst)) inst$display_name[1]
-        else NA_character_
-      },
+      affiliation = affiliation,
       stringsAsFactors = FALSE
     )
 

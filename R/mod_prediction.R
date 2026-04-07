@@ -577,15 +577,18 @@ mod_prediction_server <- function(id, resolution_rv, roster_rv) {
 
       display_df <- preds %>%
         dplyr::mutate(
-          confidence = sprintf("%.0f%%", confidence * 100),
+          confidence = ifelse(is.na(confidence), "N/A", sprintf("%.0f%%", confidence * 100)),
+          predicted_level = get_rank_level(predicted_rank),
+          current_level = get_rank_level(current_rank),
           match = dplyr::case_when(
-            is.na(current_rank) ~ "Unknown",
+            is.na(current_rank) | is.na(predicted_rank) ~ "Unknown",
             current_rank == predicted_rank ~ "Match",
-            get_rank_level(predicted_rank) > get_rank_level(current_rank) ~ "Above",
-            get_rank_level(predicted_rank) < get_rank_level(current_rank) ~ "Below",
+            !is.na(predicted_level) & !is.na(current_level) & predicted_level > current_level ~ "Above",
+            !is.na(predicted_level) & !is.na(current_level) & predicted_level < current_level ~ "Below",
             TRUE ~ "N/A"
           )
-        )
+        ) %>%
+        dplyr::select(-predicted_level, -current_level)
 
       DT::datatable(
         display_df,

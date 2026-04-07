@@ -11,6 +11,19 @@ mod_resolution_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::tagList(
+    shiny::tags$head(
+      shiny::tags$script(shiny::HTML("
+        Shiny.addCustomMessageHandler('scrollToRosterBuilder', function(msg) {
+          var content = document.querySelector('.content-wrapper');
+          if (content) {
+            content.scrollTo({top: 0, behavior: 'smooth'});
+          } else {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+          }
+        });
+      "))
+    ),
+
     # =========================================================================
     # Build Roster Section (shown when no roster loaded)
     # =========================================================================
@@ -20,8 +33,7 @@ mod_resolution_ui <- function(id) {
     # Resolution Section (shown when roster exists)
     # =========================================================================
     shiny::conditionalPanel(
-      condition = sprintf("output['%s'] != null", ns("has_roster")),
-      ns = ns,
+      condition = sprintf("output['%s'] === 'ready'", ns("has_roster")),
 
       shiny::fluidRow(
         shiny::column(
@@ -206,12 +218,8 @@ mod_resolution_server <- function(id, roster_rv) {
     # =========================================================================
 
     # Output to control conditional panel visibility
-    output$has_roster <- shiny::reactive({
-      if (!is.null(roster_rv$roster)) {
-        "ready"
-      } else {
-        NULL
-      }
+    output$has_roster <- shiny::renderText({
+      if (!is.null(roster_rv$roster)) "ready" else ""
     })
     shiny::outputOptions(output, "has_roster", suspendWhenHidden = FALSE)
 
@@ -222,16 +230,36 @@ mod_resolution_server <- function(id, roster_rv) {
         return(NULL)
       }
 
+      adding_more <- isTRUE(rv$show_roster_builder) && !is.null(roster_rv$roster)
+
       shiny::tagList(
         shiny::fluidRow(
           shiny::column(
             width = 12,
-            shiny::div(
-              class = "alert alert-info",
-              shiny::icon("info-circle"),
-              shiny::strong(" Getting Started: "),
-              "Build your faculty roster by searching OpenAlex, entering details manually, or importing a CSV file."
-            )
+            if (adding_more) {
+              shiny::div(
+                class = "alert alert-success",
+                shiny::icon("user-plus"),
+                shiny::strong(" Adding More Faculty: "),
+                sprintf(
+                  "Your roster currently has %d member(s). Search, add manually, or import below to add more.",
+                  nrow(roster_rv$roster)
+                ),
+                shiny::actionButton(
+                  ns("cancel_add_more_btn"),
+                  "Cancel",
+                  icon = shiny::icon("times"),
+                  class = "btn-default btn-sm pull-right"
+                )
+              )
+            } else {
+              shiny::div(
+                class = "alert alert-info",
+                shiny::icon("info-circle"),
+                shiny::strong(" Getting Started: "),
+                "Build your faculty roster by searching OpenAlex, entering details manually, or importing a CSV file."
+              )
+            }
           )
         ),
 
@@ -343,7 +371,7 @@ mod_resolution_server <- function(id, roster_rv) {
                   width = 4,
                   shiny::actionButton(
                     ns("roster_done_btn"),
-                    "Done Building",
+                    if (isTRUE(rv$show_roster_builder) && !is.null(roster_rv$roster)) "Add to Roster" else "Done Building",
                     icon = shiny::icon("check"),
                     class = "btn-success"
                   )
@@ -372,6 +400,13 @@ mod_resolution_server <- function(id, roster_rv) {
     shiny::observeEvent(input$add_more_faculty_btn, {
       rv$manual_roster <- NULL
       rv$show_roster_builder <- TRUE
+      session$sendCustomMessage("scrollToRosterBuilder", list())
+    })
+
+    # Cancel adding more faculty
+    shiny::observeEvent(input$cancel_add_more_btn, {
+      rv$manual_roster <- NULL
+      rv$show_roster_builder <- FALSE
     })
 
     # Search OpenAlex for authors

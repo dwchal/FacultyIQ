@@ -311,7 +311,8 @@ mod_resolution_server <- function(id, roster_rv) {
                   "Instructor" = "Instructor",
                   "Assistant Professor" = "Assistant Professor",
                   "Associate Professor" = "Associate Professor",
-                  "Professor" = "Professor"
+                  "Full Professor" = "Full Professor",
+                  "Emeritus" = "Emeritus"
                 )
               ),
               shiny::fluidRow(
@@ -447,7 +448,8 @@ mod_resolution_server <- function(id, roster_rv) {
             "Instructor" = "Instructor",
             "Assistant Professor" = "Assistant Professor",
             "Associate Professor" = "Associate Professor",
-            "Professor" = "Professor"
+            "Full Professor" = "Full Professor",
+            "Emeritus" = "Emeritus"
           ),
           width = "100%"
         ),
@@ -693,7 +695,7 @@ mod_resolution_server <- function(id, roster_rv) {
 
         # Extract columns with defaults
         email_col <- if ("email" %in% col_names) data$email else rep(NA_character_, n_rows)
-        rank_col <- if ("academic_rank" %in% col_names) data$academic_rank else rep(NA_character_, n_rows)
+        rank_col <- if ("academic_rank" %in% col_names) standardize_rank(as.character(data$academic_rank)) else rep(NA_character_, n_rows)
         promo_col <- if ("last_promotion" %in% col_names) as.character(data$last_promotion) else rep(NA_character_, n_rows)
         reaims_col <- if ("reaims_pubs" %in% col_names) as.integer(data$reaims_pubs) else rep(NA_integer_, n_rows)
         scopus_col <- if ("scopus_id" %in% col_names) as.character(data$scopus_id) else rep(NA_character_, n_rows)
@@ -1104,14 +1106,16 @@ mod_resolution_server <- function(id, roster_rv) {
                   "Instructor",
                   "Assistant Professor",
                   "Associate Professor",
-                  "Professor"
+                  "Full Professor",
+                  "Emeritus"
                 ),
                 c(
                   "",
                   "Instructor",
                   "Assistant Professor",
                   "Associate Professor",
-                  "Professor"
+                  "Full Professor",
+                  "Emeritus"
                 )
               ),
               selected = current_rank

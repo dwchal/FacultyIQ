@@ -91,6 +91,12 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
       compute_person_metrics(pd, roster_row)
     })
 
+    selected_collaboration <- shiny::reactive({
+      pd <- selected_person()
+      req(pd)
+      build_collaboration_work_table(pd, roster = roster_rv$roster)
+    })
+
     # Person info sidebar
     output$person_info <- shiny::renderUI({
       roster_row <- selected_roster()
@@ -322,6 +328,22 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
           )
         ),
 
+        shiny::fluidRow(
+          shiny::column(
+            width = 12,
+            shiny::wellPanel(
+              shiny::h4("Collaboration"),
+              shiny::fluidRow(
+                shiny::column(width = 3, shiny::wellPanel(shiny::h3(shiny::textOutput(ns("collab_avg"), inline = TRUE)), shiny::p("Avg Coauthors/Work"))),
+                shiny::column(width = 3, shiny::wellPanel(shiny::h3(shiny::textOutput(ns("collab_unique"), inline = TRUE)), shiny::p("Unique Coauthors"))),
+                shiny::column(width = 3, shiny::wellPanel(shiny::h3(shiny::textOutput(ns("collab_international"), inline = TRUE)), shiny::p("Intl Collaboration"))),
+                shiny::column(width = 3, shiny::wellPanel(shiny::h3(shiny::textOutput(ns("collab_intra_division"), inline = TRUE)), shiny::p("Intra-division")))
+              ),
+              DT::dataTableOutput(ns("table_collab_works"))
+            )
+          )
+        ),
+
         # Topics/Concepts (if available)
         shiny::fluidRow(
           shiny::column(
@@ -347,6 +369,73 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
             )
           )
         )
+      )
+    })
+
+    output$collab_avg <- shiny::renderText({
+      cw <- selected_collaboration()
+      if (nrow(cw) == 0 || all(is.na(cw$coauthor_count))) return("N/A")
+      sprintf("%.2f", mean(cw$coauthor_count, na.rm = TRUE))
+    })
+
+    output$collab_unique <- shiny::renderText({
+      cw <- selected_collaboration()
+      if (nrow(cw) == 0) return("N/A")
+      ids <- unique(unlist(lapply(cw$coauthor_ids, split_collab_field)))
+      names_vec <- unique(unlist(lapply(cw$coauthor_names, split_collab_field)))
+      if (length(ids) > 0) return(as.character(length(ids)))
+      if (length(names_vec) > 0) return(as.character(length(names_vec)))
+      "N/A"
+    })
+
+    output$collab_international <- shiny::renderText({
+      cw <- selected_collaboration()
+      if (nrow(cw) == 0 || all(is.na(cw$has_international_collab))) return("N/A")
+      sprintf("%.1f%%", 100 * mean(cw$has_international_collab, na.rm = TRUE))
+    })
+
+    output$collab_intra_division <- shiny::renderText({
+      cw <- selected_collaboration()
+      if (nrow(cw) == 0 || all(is.na(cw$has_intra_division_collab))) return("N/A")
+      sprintf("%.1f%%", 100 * mean(cw$has_intra_division_collab, na.rm = TRUE))
+    })
+
+    output$table_collab_works <- DT::renderDataTable({
+      cw <- selected_collaboration()
+      if (nrow(cw) == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No collaboration metadata available for this profile."),
+          options = list(dom = "t"),
+          rownames = FALSE
+        ))
+      }
+
+      display <- cw %>%
+        dplyr::arrange(dplyr::desc(publication_year), dplyr::desc(coauthor_count)) %>%
+        dplyr::mutate(
+          title = stringr::str_trunc(title, 80),
+          has_international_collab = dplyr::case_when(
+            is.na(has_international_collab) ~ "N/A",
+            has_international_collab ~ "Yes",
+            TRUE ~ "No"
+          ),
+          has_intra_division_collab = dplyr::case_when(
+            is.na(has_intra_division_collab) ~ "N/A",
+            has_intra_division_collab ~ "Yes",
+            TRUE ~ "No"
+          ),
+          coauthor_names = ifelse(coauthor_names == "", "N/A", stringr::str_trunc(coauthor_names, 70))
+        ) %>%
+        dplyr::select(
+          title, publication_year, coauthor_count,
+          has_international_collab, has_intra_division_collab, coauthor_names
+        )
+
+      DT::datatable(
+        display,
+        options = list(pageLength = 10, scrollX = TRUE),
+        rownames = FALSE,
+        colnames = c("Title", "Year", "Coauthors", "International", "Intra-division", "Coauthor Names")
       )
     })
 

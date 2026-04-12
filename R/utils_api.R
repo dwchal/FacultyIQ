@@ -312,6 +312,117 @@ get_openalex_works <- function(openalex_id, from_year = NULL, to_year = NULL, li
       stringsAsFactors = FALSE
     )
 
+    # Extract authorship/collaboration metadata when available
+    if ("authorships" %in% names(works)) {
+      result$author_count <- vapply(works$authorships, function(x) {
+        if (is.null(x)) return(NA_integer_)
+        if (is.data.frame(x)) return(as.integer(nrow(x)))
+        if (is.list(x)) return(as.integer(length(x)))
+        NA_integer_
+      }, FUN.VALUE = integer(1))
+
+      result$author_openalex_ids <- vapply(works$authorships, function(x) {
+        if (is.null(x)) return(NA_character_)
+
+        if (is.data.frame(x) && "author" %in% names(x)) {
+          ids <- vapply(x$author, function(a) {
+            if (is.null(a) || !is.list(a) || is.null(a$id)) return(NA_character_)
+            as.character(a$id[1])
+          }, FUN.VALUE = character(1))
+          ids <- ids[!is.na(ids) & ids != ""]
+          if (length(ids) == 0) return(NA_character_)
+          return(paste(unique(ids), collapse = "; "))
+        }
+
+        if (is.list(x)) {
+          ids <- vapply(x, function(a_row) {
+            if (is.null(a_row) || !is.list(a_row) || is.null(a_row$author)) return(NA_character_)
+            if (!is.list(a_row$author) || is.null(a_row$author$id)) return(NA_character_)
+            as.character(a_row$author$id[1])
+          }, FUN.VALUE = character(1))
+          ids <- ids[!is.na(ids) & ids != ""]
+          if (length(ids) == 0) return(NA_character_)
+          return(paste(unique(ids), collapse = "; "))
+        }
+
+        NA_character_
+      }, FUN.VALUE = character(1))
+
+      result$author_names <- vapply(works$authorships, function(x) {
+        if (is.null(x)) return(NA_character_)
+
+        if (is.data.frame(x) && "author" %in% names(x)) {
+          names_vec <- vapply(x$author, function(a) {
+            if (is.null(a) || !is.list(a) || is.null(a$display_name)) return(NA_character_)
+            as.character(a$display_name[1])
+          }, FUN.VALUE = character(1))
+          names_vec <- names_vec[!is.na(names_vec) & names_vec != ""]
+          if (length(names_vec) == 0) return(NA_character_)
+          return(paste(unique(names_vec), collapse = "; "))
+        }
+
+        if (is.list(x)) {
+          names_vec <- vapply(x, function(a_row) {
+            if (is.null(a_row) || !is.list(a_row) || is.null(a_row$author)) return(NA_character_)
+            if (!is.list(a_row$author) || is.null(a_row$author$display_name)) return(NA_character_)
+            as.character(a_row$author$display_name[1])
+          }, FUN.VALUE = character(1))
+          names_vec <- names_vec[!is.na(names_vec) & names_vec != ""]
+          if (length(names_vec) == 0) return(NA_character_)
+          return(paste(unique(names_vec), collapse = "; "))
+        }
+
+        NA_character_
+      }, FUN.VALUE = character(1))
+
+      result$author_countries <- vapply(works$authorships, function(x) {
+        if (is.null(x)) return(NA_character_)
+
+        extract_country <- function(a_row) {
+          if (is.null(a_row) || !is.list(a_row) || is.null(a_row$institutions)) return(character())
+          inst <- a_row$institutions
+          if (is.data.frame(inst) && "country_code" %in% names(inst)) {
+            vals <- as.character(inst$country_code)
+            return(vals[!is.na(vals) & vals != ""])
+          }
+          if (is.list(inst)) {
+            vals <- vapply(inst, function(ii) {
+              if (is.null(ii) || !is.list(ii) || is.null(ii$country_code)) return(NA_character_)
+              as.character(ii$country_code[1])
+            }, FUN.VALUE = character(1))
+            return(vals[!is.na(vals) & vals != ""])
+          }
+          character()
+        }
+
+        countries <- character()
+        if (is.data.frame(x)) {
+          for (k in seq_len(nrow(x))) {
+            countries <- c(countries, extract_country(x[k, ]))
+          }
+        } else if (is.list(x)) {
+          for (a_row in x) {
+            countries <- c(countries, extract_country(a_row))
+          }
+        }
+
+        countries <- unique(countries[!is.na(countries) & countries != ""])
+        if (length(countries) == 0) return(NA_character_)
+        paste(countries, collapse = "; ")
+      }, FUN.VALUE = character(1))
+    } else {
+      result$author_count <- NA_integer_
+      result$author_openalex_ids <- NA_character_
+      result$author_names <- NA_character_
+      result$author_countries <- NA_character_
+    }
+
+    if ("countries_distinct_count" %in% names(works)) {
+      result$countries_distinct_count <- suppressWarnings(as.integer(works$countries_distinct_count))
+    } else {
+      result$countries_distinct_count <- NA_integer_
+    }
+
     # Extract concepts/topics if available
     if ("concepts" %in% names(works)) {
       result$concepts <- vapply(works$concepts, function(x) {

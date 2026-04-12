@@ -790,26 +790,159 @@ compute_oa_by_year <- function(person_data_list, from_year = 2010) {
 # Collaboration Metrics
 # =============================================================================
 
+normalize_openalex_id <- function(id) {
+  if (is.null(id) || length(id) == 0 || is.na(id) || id == "") {
+    return(NA_character_)
+  }
+  id <- as.character(id)
+  id <- gsub("^https?://openalex\\.org/", "", id, ignore.case = TRUE)
+  id <- paste0("A", gsub("^[Aa]", "", id))
+  paste0("https://openalex.org/", id)
+}
+
+normalize_person_name <- function(name) {
+  if (is.null(name) || length(name) == 0 || is.na(name) || name == "") {
+    return(NA_character_)
+  }
+  out <- tolower(as.character(name))
+  out <- gsub("[^a-z0-9 ]", " ", out)
+  out <- gsub("\\s+", " ", out)
+  trimws(out)
+}
+
+split_collab_field <- function(x) {
+  if (is.null(x) || length(x) == 0 || is.na(x) || x == "") {
+    return(character())
+  }
+  vals <- trimws(unlist(strsplit(as.character(x), ";")))
+  unique(vals[vals != "" & !is.na(vals)])
+}
+
+build_collaboration_work_table <- function(pd, roster = NULL) {
+  if (is.null(pd$works) || !is.data.frame(pd$works) || nrow(pd$works) == 0) {
+    return(data.frame())
+  }
+
+  works <- pd$works
+  focal_oa_id <- normalize_openalex_id(scalar_or_na(pd$openalex$openalex_id, NA_character_))
+  focal_name <- normalize_person_name(pd$name)
+
+  roster_ids <- character()
+  roster_names <- character()
+  if (!is.null(roster) && nrow(roster) > 0) {
+    if ("openalex_id" %in% names(roster)) {
+      roster_ids <- unique(na.omit(vapply(roster$openalex_id, normalize_openalex_id, FUN.VALUE = character(1))))
+    }
+    if ("name" %in% names(roster)) {
+      roster_names <- unique(na.omit(vapply(roster$name, normalize_person_name, FUN.VALUE = character(1))))
+    }
+  }
+
+  get_intl_flag <- function(idx, country_vec) {
+    if ("countries_distinct_count" %in% names(works) && !is.na(works$countries_distinct_count[idx])) {
+      return(as.logical(works$countries_distinct_count[idx] > 1))
+    }
+    if (length(country_vec) == 0) return(NA)
+    length(unique(country_vec)) > 1
+  }
+
+  rows <- lapply(seq_len(nrow(works)), function(i) {
+    oa_ids <- split_collab_field(works$author_openalex_ids[i])
+    names_vec <- split_collab_field(works$author_names[i])
+    country_vec <- split_collab_field(works$author_countries[i])
+
+    if (!is.na(focal_oa_id)) oa_ids <- oa_ids[oa_ids != focal_oa_id]
+    if (!is.na(focal_name)) names_vec <- names_vec[normalize_person_name(names_vec) != focal_name]
+
+    author_count <- if ("author_count" %in% names(works) && !is.na(works$author_count[i])) {
+      as.integer(works$author_count[i])
+    } else if (length(oa_ids) > 0) {
+      length(oa_ids) + 1L
+    } else if (length(names_vec) > 0) {
+      length(names_vec) + 1L
+    } else {
+      NA_integer_
+    }
+
+    coauthor_count <- if (!is.na(author_count)) {
+      max(author_count - 1L, 0L)
+    } else if (length(oa_ids) > 0) {
+      length(unique(oa_ids))
+    } else if (length(names_vec) > 0) {
+      length(unique(names_vec))
+    } else {
+      NA_integer_
+    }
+
+    has_roster_collab <- NA
+    if (length(roster_ids) > 0 || length(roster_names) > 0) {
+      collab_by_id <- any(oa_ids %in% roster_ids)
+      collab_by_name <- any(normalize_person_name(names_vec) %in% roster_names)
+      has_roster_collab <- collab_by_id || collab_by_name
+    }
+
+    data.frame(
+      work_id = scalar_or_na(works$work_id[i], NA_character_),
+      title = scalar_or_na(works$title[i], NA_character_),
+      publication_year = scalar_or_na(works$publication_year[i], NA_integer_),
+      coauthor_count = coauthor_count,
+      coauthor_ids = paste(unique(oa_ids), collapse = "; "),
+      coauthor_names = paste(unique(names_vec), collapse = "; "),
+      has_international_collab = get_intl_flag(i, country_vec),
+      has_intra_division_collab = has_roster_collab,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  dplyr::bind_rows(rows)
+}
+
 #' Compute basic collaboration metrics from works
 #'
 #' @param person_data_list List of person data
+#' @param roster Optional roster data frame (used for intra-division collaboration)
 #' @return Data frame with collaboration stats
-compute_collaboration_metrics <- function(person_data_list) {
-  # Note: This is a simplified version. Full coauthor network
-  # would require additional API calls.
-
+compute_collaboration_metrics <- function(person_data_list, roster = NULL) {
   results <- list()
 
   for (i in seq_along(person_data_list)) {
     pd <- person_data_list[[i]]
+    work_collab <- build_collaboration_work_table(pd, roster = roster)
 
-    # OpenAlex works don't always include full author lists
-    # This is a placeholder for more detailed implementation
+    avg_coauthors <- if (nrow(work_collab) > 0) {
+      mean(work_collab$coauthor_count, na.rm = TRUE)
+    } else NA_real_
+    if (is.nan(avg_coauthors)) avg_coauthors <- NA_real_
+
+    unique_coauthors <- NA_integer_
+    if (nrow(work_collab) > 0) {
+      coauthor_ids <- unique(unlist(lapply(work_collab$coauthor_ids, split_collab_field)))
+      coauthor_names <- unique(unlist(lapply(work_collab$coauthor_names, split_collab_field)))
+      if (length(coauthor_ids) > 0) {
+        unique_coauthors <- as.integer(length(coauthor_ids))
+      } else if (length(coauthor_names) > 0) {
+        unique_coauthors <- as.integer(length(coauthor_names))
+      }
+    }
+
+    international_collab_rate <- if (nrow(work_collab) > 0) {
+      mean(work_collab$has_international_collab, na.rm = TRUE)
+    } else NA_real_
+    if (is.nan(international_collab_rate)) international_collab_rate <- NA_real_
+
+    intra_division_collab_rate <- if (nrow(work_collab) > 0) {
+      mean(work_collab$has_intra_division_collab, na.rm = TRUE)
+    } else NA_real_
+    if (is.nan(intra_division_collab_rate)) intra_division_collab_rate <- NA_real_
+
     results[[i]] <- data.frame(
       name = pd$name,
       roster_id = pd$roster_id,
-      avg_coauthors = NA_real_,  # Would need author counts per work
-      unique_coauthors = NA_integer_,
+      avg_coauthors = avg_coauthors,
+      unique_coauthors = unique_coauthors,
+      international_collab_rate = international_collab_rate,
+      intra_division_collab_rate = intra_division_collab_rate,
+      works_with_collab_data = nrow(work_collab),
       stringsAsFactors = FALSE
     )
   }

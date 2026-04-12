@@ -73,6 +73,13 @@ mod_dashboard_ui <- function(id) {
       shinydashboard::valueBoxOutput(ns("kpi_data_coverage"), width = 2)
     ),
 
+    shiny::fluidRow(
+      shinydashboard::valueBoxOutput(ns("kpi_avg_coauthors"), width = 3),
+      shinydashboard::valueBoxOutput(ns("kpi_unique_coauthors"), width = 3),
+      shinydashboard::valueBoxOutput(ns("kpi_international_collab"), width = 3),
+      shinydashboard::valueBoxOutput(ns("kpi_intra_division_collab"), width = 3)
+    ),
+
     shiny::hr(),
 
     # Time series plots
@@ -137,6 +144,16 @@ mod_dashboard_ui <- function(id) {
         shiny::wellPanel(
           shiny::h4("Most Cited Works"),
           DT::dataTableOutput(ns("table_top_works"))
+        )
+      )
+    ),
+
+    shiny::fluidRow(
+      shiny::column(
+        width = 12,
+        shiny::wellPanel(
+          shiny::h4("Collaboration Metrics by Faculty"),
+          DT::dataTableOutput(ns("table_collaboration"))
         )
       )
     ),
@@ -243,6 +260,11 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
     recent_metrics <- shiny::reactive({
       req(resolution_rv$person_data)
       compute_recent_metrics(resolution_rv$person_data, years = 5)
+    })
+
+    collaboration_metrics <- shiny::reactive({
+      req(resolution_rv$person_data, roster_rv$roster)
+      compute_collaboration_metrics(resolution_rv$person_data, roster = roster_rv$roster)
     })
 
     # Division summary
@@ -365,6 +387,66 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
         "Data Coverage",
         icon = shiny::icon("database"),
         color = if (pct >= 80) "green" else if (pct >= 50) "yellow" else "red"
+      )
+    })
+
+    output$kpi_avg_coauthors <- shinydashboard::renderValueBox({
+      cm <- collaboration_metrics()
+      val <- if (nrow(cm) > 0) round(mean(cm$avg_coauthors, na.rm = TRUE), 2) else NA_real_
+      if (is.nan(val)) val <- NA_real_
+      shinydashboard::valueBox(
+        ifelse(is.na(val), "N/A", format(val, nsmall = 2)),
+        "Avg Coauthors/Work",
+        icon = shiny::icon("users"),
+        color = "light-blue"
+      )
+    })
+
+    output$kpi_unique_coauthors <- shinydashboard::renderValueBox({
+      cm <- collaboration_metrics()
+      m <- filtered_metrics()
+      val <- if (nrow(cm) > 0 && nrow(m) > 0) {
+        subset <- cm %>% dplyr::filter(roster_id %in% m$roster_id)
+        round(mean(subset$unique_coauthors, na.rm = TRUE), 0)
+      } else NA_real_
+      if (is.nan(val)) val <- NA_real_
+      shinydashboard::valueBox(
+        ifelse(is.na(val), "N/A", format(val, big.mark = ",")),
+        "Avg Unique Coauthors",
+        icon = shiny::icon("project-diagram"),
+        color = "purple"
+      )
+    })
+
+    output$kpi_international_collab <- shinydashboard::renderValueBox({
+      cm <- collaboration_metrics()
+      m <- filtered_metrics()
+      val <- if (nrow(cm) > 0 && nrow(m) > 0) {
+        subset <- cm %>% dplyr::filter(roster_id %in% m$roster_id)
+        100 * mean(subset$international_collab_rate, na.rm = TRUE)
+      } else NA_real_
+      if (is.nan(val)) val <- NA_real_
+      shinydashboard::valueBox(
+        ifelse(is.na(val), "N/A", paste0(round(val, 1), "%")),
+        "Intl Collaboration Rate",
+        icon = shiny::icon("globe"),
+        color = "teal"
+      )
+    })
+
+    output$kpi_intra_division_collab <- shinydashboard::renderValueBox({
+      cm <- collaboration_metrics()
+      m <- filtered_metrics()
+      val <- if (nrow(cm) > 0 && nrow(m) > 0) {
+        subset <- cm %>% dplyr::filter(roster_id %in% m$roster_id)
+        100 * mean(subset$intra_division_collab_rate, na.rm = TRUE)
+      } else NA_real_
+      if (is.nan(val)) val <- NA_real_
+      shinydashboard::valueBox(
+        ifelse(is.na(val), "N/A", paste0(round(val, 1), "%")),
+        "Intra-division Rate",
+        icon = shiny::icon("user-friends"),
+        color = "navy"
       )
     })
 
@@ -648,6 +730,38 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
         ),
         rownames = FALSE,
         colnames = c("Title", "Author", "Year", "Citations", "Journal", "OA")
+      )
+    })
+
+    # Sparklines table
+    output$table_collaboration <- DT::renderDataTable({
+      cm <- collaboration_metrics()
+      m <- filtered_metrics()
+
+      if (nrow(cm) == 0 || nrow(m) == 0) {
+        return(DT::datatable(data.frame(Message = "No collaboration data available")))
+      }
+
+      cm <- cm %>%
+        dplyr::filter(roster_id %in% m$roster_id) %>%
+        dplyr::arrange(dplyr::desc(avg_coauthors)) %>%
+        dplyr::mutate(
+          avg_coauthors = round(avg_coauthors, 2),
+          international_collab_rate = round(100 * international_collab_rate, 1),
+          intra_division_collab_rate = round(100 * intra_division_collab_rate, 1)
+        )
+
+      DT::datatable(
+        cm %>% dplyr::select(
+          name, avg_coauthors, unique_coauthors,
+          international_collab_rate, intra_division_collab_rate, works_with_collab_data
+        ),
+        options = list(pageLength = 10, scrollX = TRUE),
+        rownames = FALSE,
+        colnames = c(
+          "Name", "Avg Coauthors/Work", "Unique Coauthors",
+          "International Collab %", "Intra-division Collab %", "Works Used"
+        )
       )
     })
 

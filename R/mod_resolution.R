@@ -677,6 +677,18 @@ mod_resolution_server <- function(id, roster_rv) {
     shiny::observeEvent(input$import_file, {
       req(input$import_file)
 
+      # Validate file type before attempting to parse
+      file_ext <- tolower(tools::file_ext(input$import_file$name))
+      allowed_types <- c("text/csv", "text/plain", "application/csv", "application/vnd.ms-excel")
+      if (!file_ext %in% c("csv", "txt") && !input$import_file$type %in% allowed_types) {
+        shiny::showNotification(
+          paste0("Invalid file type: '", input$import_file$name,
+                 "'. Please upload a CSV file (.csv or .txt)."),
+          type = "error"
+        )
+        return()
+      }
+
       tryCatch({
         data <- readr::read_csv(input$import_file$datapath, show_col_types = FALSE)
         data <- as.data.frame(data)

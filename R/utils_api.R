@@ -13,6 +13,79 @@
 # library(jsonlite)
 
 # =============================================================================
+# Shared API Utilities
+# =============================================================================
+
+#' Check whether an ID value is empty (NULL, NA, or blank string)
+#'
+#' @param x Value to test
+#' @return TRUE if empty, FALSE otherwise
+is_empty_id <- function(x) {
+  is.null(x) || length(x) == 0 || (length(x) == 1 && (is.na(x) || x == ""))
+}
+
+#' Extract h_index and i10_index from an OpenAlex summary_stats column element
+#'
+#' @param stats The summary_stats element for a single author (list or data.frame)
+#' @return Named list with h_index and i10_index (both integer, NA if unavailable)
+extract_summary_stats <- function(stats) {
+  h <- NA_integer_
+  i10 <- NA_integer_
+  if (is.null(stats)) return(list(h_index = h, i10_index = i10))
+  # Case 1: stats is a data.frame (returned when only one row fetched)
+  if (is.data.frame(stats)) {
+    if ("h_index" %in% names(stats))   h   <- as.integer(stats$h_index[1])
+    if ("i10_index" %in% names(stats)) i10 <- as.integer(stats$i10_index[1])
+    return(list(h_index = h, i10_index = i10))
+  }
+  # Case 2: stats is a nested list (returned for multi-row fetches)
+  s <- if (is.list(stats) && !is.null(stats[[1]])) stats[[1]] else stats
+  if (is.list(s)) {
+    if (!is.null(s$h_index))   h   <- as.integer(s$h_index)
+    if (!is.null(s$i10_index)) i10 <- as.integer(s$i10_index)
+  }
+  list(h_index = h, i10_index = i10)
+}
+
+#' Extract institution display name from an OpenAlex last_known_institution element
+#'
+#' @param inst The last_known_institution element for a single author
+#' @return Character string or NA_character_
+extract_institution <- function(inst) {
+  if (is.null(inst) || length(inst) == 0) return(NA_character_)
+  if (is.data.frame(inst) && "display_name" %in% names(inst)) {
+    return(as.character(inst$display_name[1]))
+  }
+  if (is.list(inst) && !is.null(inst$display_name)) {
+    return(as.character(inst$display_name[1]))
+  }
+  NA_character_
+}
+
+#' Call an API function with exponential-backoff retry on error
+#'
+#' @param fn Function to call (zero-argument thunk)
+#' @param max_attempts Maximum number of attempts (default 3)
+#' @param base_delay Initial delay in seconds between retries (doubles each attempt)
+#' @return Result of fn(), or NULL after all attempts fail
+api_retry <- function(fn, max_attempts = 3, base_delay = 1) {
+  attempt <- 1
+  delay <- base_delay
+  while (attempt <= max_attempts) {
+    result <- tryCatch(fn(), error = function(e) {
+      if (attempt < max_attempts) {
+        Sys.sleep(delay)
+      }
+      structure(list(message = e$message), class = "api_error")
+    })
+    if (!inherits(result, "api_error")) return(result)
+    attempt <- attempt + 1
+    delay <- delay * 2
+  }
+  NULL
+}
+
+# =============================================================================
 # OpenAlex Functions (Primary source, free)
 # =============================================================================
 
@@ -58,44 +131,28 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
       return(NULL)
     }
 
-    # Extract affiliations safely - handle missing column
+    # Extract affiliations and summary_stats using shared helpers
     n_authors <- nrow(authors)
-    if ("last_known_institution" %in% names(authors) &&
-        !is.null(authors[["last_known_institution"]]) &&
-        length(authors[["last_known_institution"]]) == n_authors) {
-      affiliations <- vapply(authors[["last_known_institution"]], function(x) {
-        if (is.null(x) || length(x) == 0) return(NA_character_)
-        if (is.data.frame(x)) return(as.character(x$display_name[1]))
-        if (is.list(x)) return(as.character(x$display_name[1]))
-        return(NA_character_)
-      }, FUN.VALUE = character(1))
+    has_institutions <- "last_known_institution" %in% names(authors) &&
+      !is.null(authors[["last_known_institution"]]) &&
+      length(authors[["last_known_institution"]]) == n_authors
+    affiliations <- if (has_institutions) {
+      vapply(authors[["last_known_institution"]], extract_institution, FUN.VALUE = character(1))
     } else {
-      affiliations <- rep(NA_character_, n_authors)
+      rep(NA_character_, n_authors)
     }
 
-    # Extract h_index and i10_index from summary_stats
+    has_stats <- "summary_stats" %in% names(authors) && !is.null(authors[["summary_stats"]])
     h_indices <- vapply(seq_len(n_authors), function(i) {
-      if ("summary_stats" %in% names(authors) &&
-          !is.null(authors[["summary_stats"]]) &&
-          length(authors[["summary_stats"]]) >= i) {
-        stats <- authors[["summary_stats"]][[i]]
-        if (is.list(stats) && !is.null(stats$h_index)) {
-          return(as.integer(stats$h_index))
-        }
-      }
-      return(NA_integer_)
+      if (has_stats && length(authors[["summary_stats"]]) >= i) {
+        extract_summary_stats(authors[["summary_stats"]][[i]])$h_index
+      } else NA_integer_
     }, FUN.VALUE = integer(1))
 
     i10_indices <- vapply(seq_len(n_authors), function(i) {
-      if ("summary_stats" %in% names(authors) &&
-          !is.null(authors[["summary_stats"]]) &&
-          length(authors[["summary_stats"]]) >= i) {
-        stats <- authors[["summary_stats"]][[i]]
-        if (is.list(stats) && !is.null(stats$i10_index)) {
-          return(as.integer(stats$i10_index))
-        }
-      }
-      return(NA_integer_)
+      if (has_stats && length(authors[["summary_stats"]]) >= i) {
+        extract_summary_stats(authors[["summary_stats"]][[i]])$i10_index
+      } else NA_integer_
     }, FUN.VALUE = integer(1))
 
     # Standardize output format
@@ -123,7 +180,7 @@ search_openalex_authors <- function(name, institution = NULL, limit = 10) {
 #' @param scopus_id Scopus author ID
 #' @return Data frame with author info or NULL
 get_openalex_by_scopus <- function(scopus_id) {
-  if (is.null(scopus_id) || is.na(scopus_id) || scopus_id == "") {
+  if (is_empty_id(scopus_id)) {
     return(NULL)
   }
 
@@ -142,18 +199,18 @@ get_openalex_by_scopus <- function(scopus_id) {
       return(NULL)
     }
 
-    # Extract h_index and i10_index from summary_stats
-    h_index <- NA_integer_
-    i10_index <- NA_integer_
-    if ("summary_stats" %in% names(authors) &&
-        !is.null(authors[["summary_stats"]]) &&
-        length(authors[["summary_stats"]]) >= 1) {
-      stats <- authors[["summary_stats"]][[1]]
-      if (is.list(stats)) {
-        if (!is.null(stats$h_index)) h_index <- as.integer(stats$h_index)
-        if (!is.null(stats$i10_index)) i10_index <- as.integer(stats$i10_index)
-      }
-    }
+    # Extract h_index, i10_index, and affiliation using shared helpers
+    stats_elem <- if ("summary_stats" %in% names(authors) &&
+                       !is.null(authors[["summary_stats"]]) &&
+                       length(authors[["summary_stats"]]) >= 1) {
+      authors[["summary_stats"]][[1]]
+    } else NULL
+    ss <- extract_summary_stats(stats_elem)
+
+    inst_elem <- if ("last_known_institution" %in% names(authors) &&
+                      !is.null(authors[["last_known_institution"]])) {
+      authors[["last_known_institution"]][[1]]
+    } else NULL
 
     # Return first match
     result <- data.frame(
@@ -161,19 +218,9 @@ get_openalex_by_scopus <- function(scopus_id) {
       display_name = authors$display_name[1],
       works_count = authors$works_count[1],
       cited_by_count = authors$cited_by_count[1],
-      h_index = h_index,
-      i10_index = i10_index,
-      affiliation = {
-        if ("last_known_institution" %in% names(authors) && !is.null(authors[["last_known_institution"]])) {
-          inst <- authors[["last_known_institution"]][[1]]
-          if (is.null(inst) || length(inst) == 0) NA_character_
-          else if (is.data.frame(inst) && "display_name" %in% names(inst)) as.character(inst$display_name[1])
-          else if (is.list(inst) && !is.null(inst$display_name)) as.character(inst$display_name[1])
-          else NA_character_
-        } else {
-          NA_character_
-        }
-      },
+      h_index = ss$h_index,
+      i10_index = ss$i10_index,
+      affiliation = extract_institution(inst_elem),
       stringsAsFactors = FALSE
     )
 
@@ -190,7 +237,7 @@ get_openalex_by_scopus <- function(scopus_id) {
 #' @param openalex_id OpenAlex author ID
 #' @return List with author details or NULL
 get_openalex_author <- function(openalex_id) {
-  if (is.null(openalex_id) || is.na(openalex_id) || openalex_id == "") {
+  if (is_empty_id(openalex_id)) {
     return(NULL)
   }
 
@@ -207,43 +254,24 @@ get_openalex_author <- function(openalex_id) {
     # Extract counts by year
     counts_by_year <- author$counts_by_year[[1]]
 
-    # Safely extract summary_stats
-    h_index <- NA_integer_
-    i10_index <- NA_integer_
-    if ("summary_stats" %in% names(author) && !is.null(author[["summary_stats"]])) {
-      stats <- author[["summary_stats"]]
-      if (is.data.frame(stats)) {
-        if ("h_index" %in% names(stats)) h_index <- as.integer(stats$h_index[1])
-        if ("i10_index" %in% names(stats)) i10_index <- as.integer(stats$i10_index[1])
-      } else if (is.list(stats)) {
-        s <- stats[[1]]
-        if (is.list(s)) {
-          if (!is.null(s$h_index)) h_index <- as.integer(s$h_index)
-          if (!is.null(s$i10_index)) i10_index <- as.integer(s$i10_index)
-        }
-      }
-    }
-
-    # Safely extract last_known_institution
-    institution <- NA_character_
-    if ("last_known_institution" %in% names(author) && !is.null(author[["last_known_institution"]])) {
-      inst <- author[["last_known_institution"]][[1]]
-      if (!is.null(inst) && length(inst) > 0) {
-        if (is.data.frame(inst) && "display_name" %in% names(inst)) {
-          institution <- as.character(inst$display_name[1])
-        } else if (is.list(inst) && !is.null(inst$display_name)) {
-          institution <- as.character(inst$display_name[1])
-        }
-      }
-    }
+    # Extract summary_stats and institution using shared helpers
+    ss <- extract_summary_stats(
+      if ("summary_stats" %in% names(author)) author[["summary_stats"]] else NULL
+    )
+    institution <- extract_institution(
+      if ("last_known_institution" %in% names(author) &&
+          !is.null(author[["last_known_institution"]])) {
+        author[["last_known_institution"]][[1]]
+      } else NULL
+    )
 
     list(
       openalex_id = author$id[1],
       display_name = author$display_name[1],
       works_count = author$works_count[1],
       cited_by_count = author$cited_by_count[1],
-      h_index = h_index,
-      i10_index = i10_index,
+      h_index = ss$h_index,
+      i10_index = ss$i10_index,
       last_known_institution = institution,
       counts_by_year = counts_by_year
     )
@@ -262,7 +290,7 @@ get_openalex_author <- function(openalex_id) {
 #' @param limit Maximum works to fetch
 #' @return Data frame of works or NULL
 get_openalex_works <- function(openalex_id, from_year = NULL, to_year = NULL, limit = 500) {
-  if (is.null(openalex_id) || is.na(openalex_id) || openalex_id == "") {
+  if (is_empty_id(openalex_id)) {
     return(NULL)
   }
 
@@ -478,7 +506,7 @@ get_scopus_author_metrics <- function(scopus_id) {
     return(NULL)
   }
 
-  if (is.null(scopus_id) || is.na(scopus_id) || scopus_id == "") {
+  if (is_empty_id(scopus_id)) {
     return(NULL)
   }
 
@@ -530,7 +558,7 @@ get_scopus_author_metrics <- function(scopus_id) {
 #' @param scholar_id Google Scholar user ID
 #' @return List with profile data or NULL
 get_scholar_profile <- function(scholar_id) {
-  if (is.null(scholar_id) || is.na(scholar_id) || scholar_id == "") {
+  if (is_empty_id(scholar_id)) {
     return(NULL)
   }
 
@@ -573,7 +601,7 @@ get_scholar_profile <- function(scholar_id) {
 #' @param scholar_id Google Scholar user ID
 #' @return Data frame with yearly citations or NULL
 get_scholar_citation_history <- function(scholar_id) {
-  if (is.null(scholar_id) || is.na(scholar_id) || scholar_id == "") {
+  if (is_empty_id(scholar_id)) {
     return(NULL)
   }
 
@@ -611,7 +639,7 @@ get_scholar_citation_history <- function(scholar_id) {
 #' @param limit Maximum publications to fetch
 #' @return Data frame of publications or NULL
 get_scholar_publications <- function(scholar_id, limit = 100) {
-  if (is.null(scholar_id) || is.na(scholar_id) || scholar_id == "") {
+  if (is_empty_id(scholar_id)) {
     return(NULL)
   }
 
@@ -664,7 +692,7 @@ get_scholar_publications <- function(scholar_id, limit = 100) {
 #' @param orcid_id Raw ORCID iD (may include URL prefix)
 #' @return Cleaned ORCID iD in xxxx-xxxx-xxxx-xxxx format, or NULL
 clean_orcid_id <- function(orcid_id) {
-  if (is.null(orcid_id) || is.na(orcid_id) || orcid_id == "") {
+  if (is_empty_id(orcid_id)) {
     return(NULL)
   }
   # Strip URL prefix if present
@@ -879,7 +907,7 @@ get_orcid_works <- function(orcid_id, limit = 100) {
 #' @param limit Maximum results
 #' @return Data frame of grants or NULL
 search_nih_grants_by_name <- function(name, from_year = NULL, to_year = NULL, limit = 50) {
-  if (is.null(name) || is.na(name) || name == "") {
+  if (is_empty_id(name)) {
     return(NULL)
   }
 
@@ -971,7 +999,7 @@ get_nih_grants_by_pi <- function(name, from_year = 2000) {
 #' @param limit Maximum results
 #' @return Data frame of awards or NULL
 search_nsf_awards_by_name <- function(name, from_year = NULL, to_year = NULL, limit = 50) {
-  if (is.null(name) || is.na(name) || name == "") {
+  if (is_empty_id(name)) {
     return(NULL)
   }
 
@@ -1087,7 +1115,7 @@ setup_crossref <- function(email = NULL) {
 #' @param doi DOI string (with or without https://doi.org/ prefix)
 #' @return List with metadata or NULL
 get_crossref_work_metadata <- function(doi) {
-  if (is.null(doi) || is.na(doi) || doi == "") {
+  if (is_empty_id(doi)) {
     return(NULL)
   }
 
@@ -1184,7 +1212,7 @@ enrich_works_with_crossref <- function(works_df, limit = 50) {
       works_df$crossref_has_funding[idx] <- meta$has_funding
       works_df$crossref_license_url[idx] <- meta$license_url
     }
-    Sys.sleep(0.02)  # Polite pool: ~50 req/sec
+    Sys.sleep(1 / max(0.1, null_coalesce(app_config$crossref$rate_limit_per_second, 50)))
   }
 
   return(works_df)
@@ -1200,7 +1228,7 @@ enrich_works_with_crossref <- function(works_df, limit = 50) {
 #' @param limit Maximum results to return
 #' @return Data frame of matching authors or NULL
 search_semantic_scholar_authors <- function(name, limit = 10) {
-  if (is.null(name) || is.na(name) || name == "") {
+  if (is_empty_id(name)) {
     return(NULL)
   }
 
@@ -1251,7 +1279,7 @@ search_semantic_scholar_authors <- function(name, limit = 10) {
 #' @param s2_author_id Semantic Scholar author ID
 #' @return List with author profile or NULL
 get_semantic_scholar_author <- function(s2_author_id) {
-  if (is.null(s2_author_id) || is.na(s2_author_id) || s2_author_id == "") {
+  if (is_empty_id(s2_author_id)) {
     return(NULL)
   }
 
@@ -1298,7 +1326,7 @@ get_semantic_scholar_author <- function(s2_author_id) {
 #' @param limit Maximum papers to fetch
 #' @return Data frame of papers with influentialCitationCount or NULL
 get_semantic_scholar_papers <- function(s2_author_id, limit = 100) {
-  if (is.null(s2_author_id) || is.na(s2_author_id) || s2_author_id == "") {
+  if (is_empty_id(s2_author_id)) {
     return(NULL)
   }
 
@@ -1456,8 +1484,14 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
     return(cached)
   }
 
+  # Read rate limits from config (fall back to known API limits if config unavailable)
+  scholar_sleep  <- 1 / max(0.1, null_coalesce(app_config$scholar$rate_limit_per_second,  0.5))
+  nih_sleep      <- 1 / max(0.1, null_coalesce(app_config$nih_reporter$rate_limit_per_second, 7))
+  nsf_sleep      <- 1 / max(0.1, null_coalesce(app_config$nsf_awards$rate_limit_per_second,   5))
+  s2_sleep       <- 1 / max(0.1, null_coalesce(app_config$semantic_scholar$rate_limit_per_second, 1))
+
   # Layer 1a: OpenAlex via direct ID (primary, free)
-  if (!is.null(person$openalex_id) && !is.na(person$openalex_id) && person$openalex_id != "") {
+  if (!is_empty_id(person$openalex_id)) {
     tryCatch({
       result$openalex <- get_openalex_author(person$openalex_id)
       result$works <- get_openalex_works(person$openalex_id)
@@ -1470,8 +1504,7 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 1b: OpenAlex via ORCID (if no OpenAlex ID yet)
-  if (is.null(result$openalex) &&
-      !is.null(person$orcid_id) && !is.na(person$orcid_id) && person$orcid_id != "") {
+  if (is.null(result$openalex) && !is_empty_id(person$orcid_id)) {
     tryCatch({
       oa_from_orcid <- get_openalex_by_orcid(person$orcid_id)
       if (!is.null(oa_from_orcid)) {
@@ -1487,7 +1520,7 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 1c: ORCID profile (verified affiliation and works list)
-  if (!is.null(person$orcid_id) && !is.na(person$orcid_id) && person$orcid_id != "") {
+  if (!is_empty_id(person$orcid_id)) {
     tryCatch({
       result$orcid <- get_orcid_profile(person$orcid_id)
       if (!is.null(result$orcid)) {
@@ -1499,8 +1532,7 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 2: Scopus (optional, requires key)
-  if (scopus_is_configured() &&
-      !is.null(person$scopus_id) && !is.na(person$scopus_id) && person$scopus_id != "") {
+  if (scopus_is_configured() && !is_empty_id(person$scopus_id)) {
     tryCatch({
       result$scopus <- get_scopus_author_metrics(person$scopus_id)
       if (!is.null(result$scopus)) {
@@ -1512,9 +1544,9 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 3: Google Scholar (optional, fragile)
-  if (!is.null(person$scholar_id) && !is.na(person$scholar_id) && person$scholar_id != "") {
+  if (!is_empty_id(person$scholar_id)) {
     tryCatch({
-      Sys.sleep(2)  # Rate limiting for Scholar
+      Sys.sleep(scholar_sleep)
       result$scholar <- get_scholar_profile(person$scholar_id)
       if (!is.null(result$scholar)) {
         result$data_sources <- c(result$data_sources, "Google Scholar")
@@ -1525,9 +1557,9 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 4: NIH Reporter grants (free, search by name)
-  if (!is.null(person$name) && !is.na(person$name) && person$name != "") {
+  if (!is_empty_id(person$name)) {
     tryCatch({
-      Sys.sleep(1 / 7)  # Rate limiting: 7 req/sec
+      Sys.sleep(nih_sleep)
       result$nih_grants <- get_nih_grants_by_pi(person$name)
       if (!is.null(result$nih_grants) && nrow(result$nih_grants) > 0) {
         result$data_sources <- c(result$data_sources, "NIH Reporter")
@@ -1538,9 +1570,9 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 5: NSF Awards (free, search by name)
-  if (!is.null(person$name) && !is.na(person$name) && person$name != "") {
+  if (!is_empty_id(person$name)) {
     tryCatch({
-      Sys.sleep(1 / 5)  # Rate limiting: 5 req/sec
+      Sys.sleep(nsf_sleep)
       result$nsf_grants <- get_nsf_awards_by_pi(person$name)
       if (!is.null(result$nsf_grants) && nrow(result$nsf_grants) > 0) {
         result$data_sources <- c(result$data_sources, "NSF Awards")
@@ -1563,10 +1595,9 @@ fetch_person_data <- function(person, cache_dir = "cache", cache_expiry_days = 7
   }
 
   # Layer 7: Semantic Scholar (optional, requires ID due to name ambiguity)
-  if (!is.null(person$semantic_scholar_id) && !is.na(person$semantic_scholar_id) &&
-      person$semantic_scholar_id != "") {
+  if (!is_empty_id(person$semantic_scholar_id)) {
     tryCatch({
-      Sys.sleep(1)  # Rate limiting: 1 req/sec unauthenticated
+      Sys.sleep(s2_sleep)
       result$semantic_scholar <- get_semantic_scholar_author(person$semantic_scholar_id)
       if (!is.null(result$semantic_scholar)) {
         s2_papers <- get_semantic_scholar_papers(person$semantic_scholar_id)

@@ -516,18 +516,26 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
           dplyr::arrange(dplyr::desc(publication_year), dplyr::desc(cited_by_count))
       }
 
-      # Prepare display
+      # Prepare display - build anchor tags safely:
+      # - title text is HTML-escaped via htmltools::htmlEscape()
+      # - DOI href is validated to only allow https://doi.org/ URLs
       display_df <- works %>%
         dplyr::select(title, publication_year, cited_by_count, journal, is_oa, doi) %>%
         dplyr::mutate(
-          title = sapply(seq_len(dplyr::n()), function(i) {
-            if (!is.na(doi[i])) {
-              sprintf('<a href="%s" target="_blank">%s</a>',
-                      doi[i], stringr::str_trunc(title[i], 80))
-            } else {
-              stringr::str_trunc(title[i], 80)
-            }
-          }),
+          title = {
+            label <- stringr::str_trunc(title, 80)
+            safe_label <- htmltools::htmlEscape(label)
+            safe_doi <- dplyr::if_else(
+              !is.na(doi) & grepl("^https://doi\\.org/", doi),
+              doi,
+              NA_character_
+            )
+            dplyr::if_else(
+              !is.na(safe_doi),
+              paste0('<a href="', safe_doi, '" target="_blank" rel="noopener noreferrer">', safe_label, '</a>'),
+              safe_label
+            )
+          },
           journal = stringr::str_trunc(journal, 40),
           is_oa = ifelse(is_oa == TRUE, "Yes", "No")
         ) %>%
@@ -535,7 +543,9 @@ mod_profile_server <- function(id, resolution_rv, roster_rv) {
 
       DT::datatable(
         display_df,
-        escape = FALSE,
+        # escape = FALSE only for 'title' column (index 1); all other columns remain escaped.
+        # The title column is manually HTML-escaped above; href is validated to https://doi.org/.
+        escape = c(2, 3, 4, 5),
         options = list(
           pageLength = 15,
           scrollX = TRUE

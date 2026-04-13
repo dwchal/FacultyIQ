@@ -295,20 +295,26 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
       )
     })
 
+    # Debounced filter inputs — avoid recalculating on every slider pixel
+    year_range_d    <- shiny::debounce(shiny::reactive(input$year_range),    400)
+    rank_filter_d   <- shiny::debounce(shiny::reactive(input$rank_filter),   200)
+    person_filter_d <- shiny::debounce(shiny::reactive(input$person_filter), 200)
+    filter_mode_d   <- shiny::debounce(shiny::reactive(input$filter_mode),   200)
+
     # Filtered metrics
     filtered_metrics <- shiny::reactive({
       req(metrics_df())
       m <- metrics_df()
 
       # Apply rank filter
-      if (!"all" %in% input$rank_filter && length(input$rank_filter) > 0) {
-        m <- m %>% dplyr::filter(academic_rank %in% input$rank_filter)
+      if (!"all" %in% rank_filter_d() && length(rank_filter_d()) > 0) {
+        m <- m %>% dplyr::filter(academic_rank %in% rank_filter_d())
       }
 
       # Apply person filter
-      if (!"all" %in% input$person_filter && length(input$person_filter) > 0) {
-        ids <- as.integer(input$person_filter)
-        if (input$filter_mode == "include") {
+      if (!"all" %in% person_filter_d() && length(person_filter_d()) > 0) {
+        ids <- as.integer(person_filter_d())
+        if (filter_mode_d() == "include") {
           m <- m %>% dplyr::filter(roster_id %in% ids)
         } else {
           m <- m %>% dplyr::filter(!roster_id %in% ids)
@@ -462,8 +468,8 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
       yearly <- create_yearly_timeseries(
         resolution_rv$person_data,
         metric = "works",
-        from_year = input$year_range[1],
-        to_year = input$year_range[2]
+        from_year = year_range_d()[1],
+        to_year = year_range_d()[2]
       )
 
       if (nrow(yearly) == 0) {
@@ -530,8 +536,8 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
       yearly <- create_yearly_timeseries(
         resolution_rv$person_data,
         metric = "citations",
-        from_year = input$year_range[1],
-        to_year = input$year_range[2]
+        from_year = year_range_d()[1],
+        to_year = year_range_d()[2]
       )
 
       if (nrow(yearly) == 0) {
@@ -593,7 +599,7 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
 
       oa_yearly <- compute_oa_by_year(
         resolution_rv$person_data,
-        from_year = input$year_range[1]
+        from_year = year_range_d()[1]
       )
 
       if (is.null(oa_yearly) || nrow(oa_yearly) == 0) {
@@ -602,7 +608,7 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
       }
 
       oa_yearly <- oa_yearly %>%
-        dplyr::filter(year <= input$year_range[2])
+        dplyr::filter(year <= year_range_d()[2])
 
       p <- ggplot2::ggplot(oa_yearly, ggplot2::aes(x = year, y = pct_oa)) +
         ggplot2::geom_col(fill = "coral", alpha = 0.7) +
@@ -775,8 +781,8 @@ mod_dashboard_server <- function(id, resolution_rv, roster_rv) {
       yearly <- create_yearly_timeseries(
         resolution_rv$person_data,
         metric = "works",
-        from_year = max(1990, input$year_range[1]),
-        to_year = input$year_range[2]
+        from_year = max(1990, year_range_d()[1]),
+        to_year = year_range_d()[2]
       )
 
       if (nrow(yearly) == 0) {

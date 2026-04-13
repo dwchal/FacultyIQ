@@ -88,7 +88,8 @@ app_config <- tryCatch({
 openalex_email <- Sys.getenv("OPENALEX_EMAIL", "")
 if (openalex_email != "") {
   options(openalexR.mailto = openalex_email)
-  message(sprintf("OpenAlex polite pool enabled with email: %s", openalex_email))
+  message(sprintf("OpenAlex polite pool enabled with email: %s",
+                  sub("(?<=.)(?=@)", "***", openalex_email, perl = TRUE)))
 } else {
   message("OPENALEX_EMAIL not set - using standard rate limits")
 }
